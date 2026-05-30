@@ -1,4 +1,5 @@
 """Tests for clevis configuration module."""
+
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -7,7 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
-from clevis import get_config, apply_to_dict, list_fields, unpack_type, ConfigError, _get_toml_parser, _load_toml
+from clevis import (
+  get_config,
+  apply_to_dict,
+  list_fields,
+  unpack_type,
+  ConfigError,
+  _get_toml_parser,
+  _load_toml,
+)
 
 
 class TestUnpackType:
@@ -175,6 +184,76 @@ class TestGetConfig:
     assert config.database.port == 5432
 
 
+class TestCliParameter:
+  """Tests for cli parameter in get_config."""
+
+  def test_cli_false_skips_sys_argv(self):
+    """cli=False should not parse sys.argv."""
+
+    @dataclass
+    class Config:
+      name: str = "default"
+
+    # Patch sys.argv to contain actual CLI arguments
+    # These should be ignored when cli=False
+    with patch.object(sys, "argv", ["test_program", "--name", "from_sys_argv"]):
+      config = get_config(Config, name="test", user=False, project=False, cli=False)
+      assert config.name == "default"  # sys.argv should be ignored
+
+  def test_cli_false_with_explicit_args(self):
+    """cli=False with args should still parse provided args."""
+
+    @dataclass
+    class Config:
+      name: str = "default"
+
+    config = get_config(
+      Config, name="test", user=False, project=False, cli=False, args=["--name", "from_args"]
+    )
+    assert config.name == "from_args"
+
+  def test_cli_false_error_message(self):
+    """cli=False should produce error without CLI suggestion."""
+
+    @dataclass
+    class Config:
+      required: str  # No default
+
+    with pytest.raises(ConfigError) as exc_info:
+      get_config(Config, name="test", user=False, project=False, cli=False)
+
+    error_msg = str(exc_info.value)
+    assert "CLI argument" not in error_msg
+    assert "--required" not in error_msg
+    # Should still show config file suggestions
+    assert "test.toml" in error_msg
+
+  def test_cli_true_error_message(self):
+    """cli=True should produce error with CLI suggestion."""
+
+    @dataclass
+    class Config:
+      required: str  # No default
+
+    with pytest.raises(ConfigError) as exc_info:
+      get_config(Config, name="test", user=False, project=False, cli=True, args=[])
+
+    error_msg = str(exc_info.value)
+    assert "CLI argument" in error_msg
+    assert "--required" in error_msg
+
+  def test_backward_compatibility_default_cli_true(self):
+    """Default behavior should remain unchanged (cli=True)."""
+
+    @dataclass
+    class Config:
+      name: str = "default"
+
+    # No cli parameter specified - should behave like cli=True
+    config = get_config(Config, name="test", user=False, project=False, args=[])
+    assert config.name == "default"
+
+
 class TestConfigError:
   """Tests for error handling."""
 
@@ -213,7 +292,7 @@ class TestConfigError:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[database]\nport = 5432\n')  # Missing host
+      config_file.write_text("[database]\nport = 5432\n")  # Missing host
 
       original_dir = os.getcwd()
       try:

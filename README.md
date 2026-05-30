@@ -148,9 +148,35 @@ make test
 make test-cov
 ```
 
+## Library Integration
+
+When using Clevis as a library (not a CLI app), you can disable CLI parsing:
+
+```python
+from clevis import get_config
+
+# Library mode - skip sys.argv parsing
+config = get_config(Config, name="myapp", cli=False)
+
+# Programmatic control with explicit args
+config = get_config(Config, name="myapp", cli=False, args=["--debug"])
+
+# Testing
+def test_my_config():
+    config = get_config(TestConfig, cli=False, user=False, project=False)
+    assert config.name == "default"
+```
+
+### Why `cli=False`?
+
+Using `cli=False` instead of `args=[]`:
+- **Clear Intent**: Explicitly signals library usage
+- **Better Errors**: Error messages omit CLI suggestions when not applicable
+- **No Overhead**: Skips argparse parser creation entirely
+
 ## API Reference
 
-### `get_config(data_class, name="project", user=True, project=True, args=None)`
+### `get_config(data_class, name="project", user=True, project=True, cli=True, args=None)`
 
 Load configuration from TOML files and CLI arguments.
 
@@ -159,7 +185,8 @@ Load configuration from TOML files and CLI arguments.
 - `name` — Config file name (without `.toml`)
 - `user` — Load user-level config (`~/.{name}.toml`)
 - `project` — Load project-level config (`./{name}.toml`)
-- `args` — CLI arguments (defaults to `sys.argv[1:]`)
+- `cli` — Parse CLI arguments from `sys.argv` (default: `True`)
+- `args` — CLI arguments (defaults to `sys.argv[1:]` when `cli=True`)
 
 **Returns:** Instance of the dataclass with merged configuration
 
@@ -171,6 +198,7 @@ Load configuration from TOML files and CLI arguments.
 
 Clevis provides helpful, actionable errors:
 
+**When using CLI (default):**
 ```
 ======================================================================
 Configuration Error
@@ -189,6 +217,27 @@ Provide this value in one of these ways:
      (same format as above)
 
   3. CLI argument: --database-host <value>
+
+======================================================================
+```
+
+**When using library mode (`cli=False`):**
+```
+======================================================================
+Configuration Error
+======================================================================
+
+Field: database.host
+Issue: Required field has no value
+
+Provide this value in one of these ways:
+
+  1. Project config: ./project.toml
+     [database]
+     host = "your_value"
+
+  2. User config: ~/.project.toml
+     (same format as above)
 
 ======================================================================
 ```
