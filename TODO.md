@@ -6,13 +6,6 @@
 
 These tasks must be completed before any release.
 
-- [ ] **P1-002: Create Missing Documentation Files**
-  - docs/installation.rst - Installation guide with pip/uv instructions
-  - docs/usage.rst - Detailed usage examples and patterns
-  - docs/api.rst - API reference (can use autodoc)
-  - These files are referenced in docs/index.rst toctree
-  - **Satisfies**: R2 (Documentation completeness)
-  - **Acceptance**: `make docs` builds without warnings, ReadTheDocs can render
 
 ### Phase 2: Quality Assurance (P2 - High)
 
@@ -119,6 +112,14 @@ These are potential future enhancements that could be explored.
   - **Acceptance**: Can load from YAML/JSON files
 
 ## Done
+
+- [x] **P1-002: Create Missing Documentation Files** ✅ 2026-05-30
+  - docs/installation.rst - Installation guide with pip/uv instructions
+  - docs/usage.rst - Detailed usage examples and patterns
+  - docs/api.rst - API reference (can use autodoc)
+  - These files are referenced in docs/index.rst toctree
+  - **Satisfies**: R2 (Documentation completeness)
+  - **Acceptance**: `make docs` builds without warnings, ReadTheDocs can render
 
 - [x] **P1-001: Create Initial Git Commit** ✅ 2026-05-30
   - The repository has no commits yet - all files are untracked
