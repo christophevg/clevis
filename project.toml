@@ -1,0 +1,15 @@
+# env.toml
+app_name = "My Application"
+# debug = true
+environment = "${ENV}"
+
+[database]
+# host = "${DB_HOST}"
+user = "${DB_USER}"
+# port = 1234
+password = "${DB_PASSWORD}"
+name = "${DB_NAME}"
+
+[redis]
+host = "${REDIS_HOST}"
+# port = 5678

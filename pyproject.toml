@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "clevis"
+version = "0.1.0"
+description = "Configuration management for Python projects with dataclass-based schemas"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Christophe Van Ginneken", email = "christophe@christophe.vg" }]
+keywords = ["configuration", "toml", "dataclass", "cli", "argparse"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = ["dacite"]
+
+[project.optional-dependencies]
+tomli = ["tomli"]
+envtoml = ["envtoml"]
+tomlev = ["tomlev"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "tox"]
+docs = ["sphinx>=7.0.0", "sphinx-rtd-theme>=2.0.0", "myst-parser>=2.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/christophevg/clevis"
+Documentation = "https://clevis.readthedocs.io"
+Repository = "https://github.com/christophevg/clevis"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/clevis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=src --cov-report=term-missing"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+strict = true
+
+[tool.ruff]
+line-length = 100
+indent-width = 2
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["clevis"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
+]
+
+[tool.tox]
+env_list = ["py310", "py311", "py312"]
+
+[tool.tox.env_run_base]
+description = "Run tests under {base_python}"
+deps = ["pytest", "pytest-cov"]
+commands = [["pytest", "-v", "--cov=src", "--cov-report=term-missing"]]
