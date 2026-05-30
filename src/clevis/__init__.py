@@ -13,9 +13,10 @@ TOML Parser Selection (priority order):
 
 import argparse
 import functools
-from dataclasses import Field, dataclass, field, fields, is_dataclass
+from collections.abc import Callable
+from dataclasses import Field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Callable, get_args
+from typing import Any, get_args
 
 from dacite import from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
@@ -28,7 +29,7 @@ __version__ = "0.1.0"
 # Tries parsers in this order: envtoml > tomlev > tomli > tomllib
 
 
-def _get_toml_parser() -> Callable:
+def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   """
   Get the appropriate TOML parser based on installed packages.
 
@@ -50,15 +51,15 @@ def _get_toml_parser() -> Callable:
 
   # tomlev: supports ${VAR|default} interpolation
   try:
-    from tomlev.env_loader import expandvars
-    import tomllib
+    import tomllib  # type: ignore[import-not-found]
+    from tomlev.env_loader import expandvars  # type: ignore[attr-defined]
 
-    def load_with_tomlev(file):
+    def load_with_tomlev(file: Any) -> dict[str, Any]:
       content = file.read()
       if isinstance(content, bytes):
         content = content.decode("utf-8")
       expanded = expandvars(content)
-      return tomllib.loads(expanded)
+      return tomllib.loads(expanded)  # type: ignore[no-any-return]
 
     return load_with_tomlev
   except ImportError:
@@ -76,7 +77,7 @@ def _get_toml_parser() -> Callable:
   try:
     import tomllib
 
-    return tomllib.load
+    return tomllib.load  # type: ignore[no-any-return]
   except ImportError:
     pass
 
@@ -91,7 +92,7 @@ def _get_toml_parser() -> Callable:
 
 
 # Module-level parser (loaded once)
-_toml_load: Callable | None = None
+_toml_load: Callable[[Any], dict[str, Any]] | None = None
 
 
 def _load_toml(file: Any) -> dict[str, Any]:
@@ -122,7 +123,7 @@ class ConfigError(Exception):
   def _format_message(self) -> str:
     """Format a helpful error message with actionable suggestions."""
     lines = [f"\n{'=' * 70}"]
-    lines.append(f"Configuration Error")
+    lines.append("Configuration Error")
     lines.append(f"{'=' * 70}\n")
 
     lines.append(f"Field: {self.field_path}")
@@ -175,10 +176,10 @@ def unpack_type(type_def: type) -> type:
   # <type> | None is only supported combination
   if len(types) > 2:
     raise ValueError("Complex unions not supported")
-  return types[0] if types[1] is type(None) else types[1]
+  return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
 
 
-def list_fields(clz: type, path: list[str] | None = None) -> list[tuple[Field, list[str]]]:
+def list_fields(clz: type, path: list[str] | None = None) -> list[tuple[Field[Any], list[str]]]:
   """
   Recursively flatten and list all properties in nested dataclasses.
 
@@ -192,7 +193,7 @@ def list_fields(clz: type, path: list[str] | None = None) -> list[tuple[Field, l
   path = [] if not path else path
   result = []
   for f in fields(clz):
-    concrete_type = unpack_type(f.type)
+    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
     if is_dataclass(concrete_type):
       result.extend(list_fields(concrete_type, path=path + [f.name]))
     else:
@@ -228,7 +229,7 @@ def get_args_config(clz: type, args: list[str] | None = None) -> dict[str, Any]:
       help=f"provide {name}",
     )
     # complete partial: boolean switch of store value
-    concrete_type = unpack_type(f.type)
+    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
     if concrete_type is bool:
       _ = arg(action="store_true")
     else:
@@ -355,3 +356,4 @@ def get_config(
       field_path="unknown",
       config_name=name,
     ) from None
+
