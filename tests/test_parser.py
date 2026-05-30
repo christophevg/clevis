@@ -1,4 +1,5 @@
 """Tests for TOML parser selection."""
+
 import sys
 import tempfile
 from pathlib import Path

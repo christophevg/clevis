@@ -114,10 +114,11 @@ def _load_toml(file: Any) -> dict[str, Any]:
 class ConfigError(Exception):
   """Raised when configuration is missing or invalid."""
 
-  def __init__(self, message: str, field_path: str, config_name: str):
+  def __init__(self, message: str, field_path: str, config_name: str, suggest_cli: bool = True):
     self.message = message
     self.field_path = field_path
     self.config_name = config_name
+    self.suggest_cli = suggest_cli
     super().__init__(self._format_message())
 
   def _format_message(self) -> str:
@@ -145,9 +146,10 @@ class ConfigError(Exception):
     lines.append(f"  2. User config: ~/.{self.config_name}.toml")
     lines.append("     (same format as above)\n")
 
-    # CLI argument (use dashes for dots and underscores)
-    cli_arg = "--" + self.field_path.replace(".", "-").replace("_", "-")
-    lines.append(f"  3. CLI argument: {cli_arg} <value>\n")
+    # CLI argument - only suggest when appropriate
+    if self.suggest_cli:
+      cli_arg = "--" + self.field_path.replace(".", "-").replace("_", "-")
+      lines.append(f"  3. CLI argument: {cli_arg} <value>\n")
 
     lines.append(f"{'=' * 70}")
     return "\n".join(lines)
@@ -269,13 +271,14 @@ def get_config(
   name: str = "project",
   user: bool = True,
   project: bool = True,
+  cli: bool = True,
   args: list[str] | None = None,
 ) -> Any:
   """
   Load configuration from TOML files and CLI arguments.
 
   Merges configuration from (in order of precedence):
-  1. CLI arguments (highest priority)
+  1. CLI arguments (highest priority) - only when cli=True or args is provided
   2. Project-level TOML: ./{name}.toml
   3. User-level TOML: ~/.{name}.toml
   4. Dataclass defaults (lowest priority)
@@ -292,7 +295,8 @@ def get_config(
       name: Configuration file name (without .toml extension)
       user: Whether to load user-level config(~/.{name}.toml)
       project: Whether to load project-level config (./{name}.toml)
-      args: Optional list of CLI arguments (defaults to sys.argv[1:])
+      cli: Whether to parse CLI arguments from sys.argv (default: True)
+      args: Optional list of CLI arguments (overrides sys.argv when provided)
 
   Returns:
       An instance of the dataclass with merged configuration
@@ -315,11 +319,11 @@ def get_config(
     if project_path.exists():
       cfg.update(_load_toml(project_path.open("rb")))
 
-  # Get CLI args based on dataclass hierarchy
-  cli_args = get_args_config(data_class, args)
-
-  # Merge CLI args into config
-  apply_to_dict(cli_args, cfg)
+  # Parse CLI args if requested
+  if cli or args is not None:
+    cli_args = get_args_config(data_class, args)
+    # Merge CLI args into config
+    apply_to_dict(cli_args, cfg)
 
   # Convert dict to dataclass
   try:
@@ -336,6 +340,7 @@ def get_config(
       message="Required field has no value",
       field_path=field_path,
       config_name=name,
+      suggest_cli=cli,
     ) from None
   except WrongTypeError as e:
     # Extract field path and type info from dacite error
@@ -348,6 +353,7 @@ def get_config(
       message="Wrong type for field",
       field_path=field_path,
       config_name=name,
+      suggest_cli=cli,
     ) from None
   except DaciteError as e:
     # Catch any other dacite errors
@@ -355,4 +361,5 @@ def get_config(
       message=str(e),
       field_path="unknown",
       config_name=name,
+      suggest_cli=cli,
     ) from None
