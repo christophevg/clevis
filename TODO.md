@@ -2,26 +2,6 @@
 
 ## Backlog
 
-### Phase 1: Release Preparation (P1 - Critical)
-
-These tasks must be completed before any release.
-
-- [ ] **P1-003: Make CLI Support Optional**
-  - Add `cli=False` parameter to `get_config()` to skip sys.args handling
-  - When `cli=False`, do not invoke argparse (no CLI argument parsing)
-  - Still accept `args` parameter for external injection/pass-through
-  - Adapt error messages to execution context (no CLI arguments when `cli=False`)
-  - Primary use case: library usage (integration in yoker and roomz projects)
-  - **GitHub Issue**: #1
-  - **Satisfies**: Library integration requirement
-  - **Acceptance**:
-    - `get_config(cli=False)` does not parse sys.args
-    - `get_config(cli=False, args=['--option', 'value'])` works for programmatic usage
-    - Error messages indicate library context when `cli=False`
-    - Follows Python Package best practices
-    - Enables integration in yoker and roomz projects
-
-
 ### Phase 2: Quality Assurance (P2 - High)
 
 These tasks improve quality and should be done before PyPI publication.
@@ -127,6 +107,23 @@ These are potential future enhancements that could be explored.
   - **Acceptance**: Can load from YAML/JSON files
 
 ## Done
+
+- [x] **P1-003: Make CLI Support Optional** ✅ 2026-05-30 #2
+  - Add `cli=False` parameter to `get_config()` to skip sys.args handling
+  - When `cli=False`, do not invoke argparse (no CLI argument parsing)
+  - Still accept `args` parameter for external injection/pass-through
+  - Adapt error messages to execution context (no CLI arguments when `cli=False`)
+  - Primary use case: library usage (integration in yoker and roomz projects)
+  - **GitHub Issue**: #1
+  - **GitHub PR**: #2
+  - **Satisfies**: Library integration requirement
+  - **Acceptance**:
+    - `get_config(cli=False)` does not parse sys.args
+    - `get_config(cli=False, args=['--option', 'value'])` works for programmatic usage
+    - Error messages indicate library context when `cli=False`
+    - Follows Python Package best practices
+    - Enables integration in yoker and roomz projects
+
 
 - [x] **P1-002: Create Missing Documentation Files** ✅ 2026-05-30
   - docs/installation.rst - Installation guide with pip/uv instructions
