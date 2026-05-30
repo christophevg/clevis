@@ -1,6 +1,6 @@
 -include ~/.claude/Makefile
 
-.PHONY: help env-dev env-run test test-cov test-all run format lint typecheck check build pre-publish publish clean clean-all
+.PHONY: help env-dev env-run test test-cov test-all run format lint typecheck check build pre-publish publish publish-test clean clean-all
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -55,11 +55,17 @@ pre-publish: check ## Pre-publication checks (run before publishing)
 	echo "OK: Versions match ($$VERSION_PY)"
 	@echo "Pre-publication checks passed"
 
-publish: pre-publish ## Publish to PyPI
-	uv publish
+publish: clean build ## Publish to PyPI (runs pre-publish checks)
+	@$(MAKE) pre-publish
+	uv run twine upload dist/*
+
+publish-test: build ## Publish to TestPyPI
+	uv run twine upload --repository testpypi dist/*
 
 clean: ## Remove build artifacts
 	rm -rf dist/ *.egg-info .pytest_cache .coverage htmlcov/ .mypy_cache .ruff_cache
 
 clean-all: clean ## Remove virtualenv and lock file
 	rm -rf .venv uv.lock
+
+
