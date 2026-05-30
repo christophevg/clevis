@@ -56,7 +56,4 @@ Quick Start
 API Reference
 =============
 
-.. autofunction:: clevis.get_config
-
-.. autoclass:: clevis.ConfigError
-   :members:
+For detailed API documentation, see the :doc:`api` page.

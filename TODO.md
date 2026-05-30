@@ -6,13 +6,6 @@
 
 These tasks must be completed before any release.
 
-- [ ] **P1-001: Create Initial Git Commit**
-  - The repository has no commits yet - all files are untracked
-  - Create initial commit with all project files
-  - Include: source code, tests, docs, configuration files
-  - **Satisfies**: R1 (Git history requirement)
-  - **Acceptance**: `git log` shows initial commit with all files
-
 - [ ] **P1-002: Create Missing Documentation Files**
   - docs/installation.rst - Installation guide with pip/uv instructions
   - docs/usage.rst - Detailed usage examples and patterns
@@ -127,4 +120,9 @@ These are potential future enhancements that could be explored.
 
 ## Done
 
-(None yet - this is the initial backlog)
+- [x] **P1-001: Create Initial Git Commit** ✅ 2026-05-30
+  - The repository has no commits yet - all files are untracked
+  - Create initial commit with all project files
+  - Include: source code, tests, docs, configuration files
+  - **Satisfies**: R1 (Git history requirement)
+  - **Acceptance**: `git log` shows initial commit with all files
