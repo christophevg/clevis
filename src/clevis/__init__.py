@@ -356,4 +356,3 @@ def get_config(
       field_path="unknown",
       config_name=name,
     ) from None
-
