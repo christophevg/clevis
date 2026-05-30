@@ -21,7 +21,7 @@ from typing import Any, get_args
 from dacite import from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 # TOML Parser Selection
