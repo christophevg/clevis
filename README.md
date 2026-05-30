@@ -6,6 +6,7 @@
 [![Coverage][coverage-badge]][coverage]
 [![License][license-badge]][license]
 [![Agentic][agentic-badge]][agentic]
+[![PACKAGE.md](https://img.shields.io/badge/pkgq-PACKAGE.md-blueviolet)](https://github.com/christophevg/pkgq#readme)
 
 > Configuration management for Python projects with dataclass-based schemas
 
