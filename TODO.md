@@ -49,6 +49,21 @@ These tasks improve quality and should be done before PyPI publication.
   - **Satisfies**: R3 (Test coverage requirement)
   - **Acceptance**: `make test-cov` shows 90%+ coverage
 
+- [ ] **P2-007: Expose CLI Argument Definitions for Custom Parsers**
+  - Add `get_argument_definitions()` function yielding argument tuples compatible with `parser.add_argument()`
+  - Modify `get_config()` to accept `args: dict[str, Any]` using full destination names (e.g., `{"database.host": "localhost"}`)
+  - Refactor internal argument generation to use `get_argument_definitions()`, avoiding code duplication
+  - Maintain backward compatibility with existing API
+  - Primary use case: integrate Clevis configuration into custom CLI applications with their own parsers
+  - **GitHub Issue**: #3
+  - **Satisfies**: R54, R55, R56, R57
+  - **Acceptance**:
+    - `get_argument_definitions(Config)` yields tuples compatible with `parser.add_argument()`
+    - `get_config(Config, cli=False, args={"database.host": "localhost"})` works with dict input
+    - Internal `get_args_config()` uses `get_argument_definitions()` (single source of truth)
+    - Existing API remains unchanged and functional
+    - Documentation includes integration pattern examples
+
 ### Phase 3: Enhancements (P3 - Medium)
 
 These are nice-to-have improvements for better developer experience.

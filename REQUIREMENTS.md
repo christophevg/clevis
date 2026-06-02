@@ -29,6 +29,10 @@
 - [x] R17: Boolean fields with store_true action
 - [x] R18: Optional field handling (None defaults)
 - [x] R19: Type preservation through argparse
+- [ ] R54: Expose argument definitions for custom parser integration (`get_argument_definitions()`)
+- [ ] R55: Accept dict input in `get_config()` for parsed arguments
+- [ ] R56: Single source of truth for argument generation (internal refactoring)
+- [ ] R57: Backward compatibility maintained for existing API
 
 ### Error Handling
 
@@ -83,6 +87,8 @@
 - [ ] R51: Tests for boolean CLI arguments
 - [ ] R52: Tests for error handling branches
 - [ ] R53: Tests for parser fallback paths
+- [ ] R58: Tests for `get_argument_definitions()` function
+- [ ] R59: Tests for dict input in `get_config()`
 
 ## Completed
 
