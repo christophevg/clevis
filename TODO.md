@@ -68,21 +68,36 @@ These tasks improve quality and should be done before PyPI publication.
 
 These are nice-to-have improvements for better developer experience.
 
-- [ ] **P3-001: Add Type Stub Files**
+- [ ] **P3-001: Add Security Parameter to get_config()** (Priority: Unassigned - pending review)
+  - Add optional `security` argument to `get_config()` function
+  - Default security policy: maximally strict (reject on security issues)
+  - Per-check options: Don't Check | Log | Reject
+  - Security checks should validate configuration file permissions and parent folder security
+  - Out of scope: validation support (dataclasses handle this)
+  - **GitHub Issue**: #4
+  - **Satisfies**: Security hardening requirement
+  - **Acceptance**:
+    - `get_config(..., security={...})` parameter works
+    - Default behavior rejects insecure configurations
+    - Individual checks can be configured (Don't Check, Log, Reject)
+    - Configuration file permission validation implemented
+    - Directory security validation implemented
+
+- [ ] **P3-002: Add Type Stub Files**
   - Create `src/clevis/__init__.pyi` with type stubs
   - Improves IDE autocomplete and type checking
   - Include all public functions and ConfigError class
   - **Satisfies**: R5 (Developer experience)
   - **Acceptance**: mypy validates stubs, IDE provides better autocomplete
 
-- [ ] **P3-002: Add More Usage Examples**
+- [ ] **P3-003: Add More Usage Examples**
   - Add examples for common patterns (nested configs, env vars)
   - Consider adding an examples/ directory
   - Include examples in documentation
   - **Satisfies**: R2 (Documentation quality)
   - **Acceptance**: Documentation includes practical examples
 
-- [ ] **P3-003: Add Validation Documentation**
+- [ ] **P3-004: Add Validation Documentation**
   - Document how to validate config beyond types
   - Show patterns for custom validation
   - Consider adding a validation callback parameter
