@@ -44,7 +44,7 @@ print(config.name)  # Uses dataclass default if no TOML found
 
 ## Key Components
 
-### `get_config(data_class, name="project", user=True, project=True, args=None)`
+### `get_config(data_class, name="project", user=True, project=True, cli=True, args=None)`
 
 The main entry point for loading configuration. Merges configuration from multiple sources and returns a populated dataclass instance.
 
@@ -71,6 +71,7 @@ config = get_config(AppConfig, name="app")
 - `name` — Configuration file name (without `.toml` extension)
 - `user` — Whether to load `~/.{name}.toml` (default: True)
 - `project` — Whether to load `./{name}.toml` (default: True)
+- `cli` — Whether to parse CLI arguments from `sys.argv` (default: True)
 - `args` — CLI arguments (defaults to `sys.argv[1:]`)
 
 **Returns:** Instance of the dataclass with merged configuration
@@ -254,11 +255,26 @@ def test_with_config():
     original_dir = os.getcwd()
     try:
       os.chdir(tmpdir)
-      config = get_config(Config, name="test", user=False, args=[])
+      # cli=False disables CLI parsing, args=[] ensures no sys.argv interference
+      config = get_config(Config, name="test", user=False, cli=False)
       assert config.name == "test"
       assert config.value == 42
     finally:
       os.chdir(original_dir)
+```
+
+### Library Mode (No CLI)
+
+When embedding Clevis in a library or testing, disable CLI parsing:
+
+```python
+from clevis import get_config
+
+# Library mode - only load from files, ignore sys.argv
+config = get_config(Config, name="app", cli=False)
+
+# Testing - combine with other parameters
+config = get_config(Config, name="app", user=False, cli=False)
 ```
 
 ## TOML Parser Selection
@@ -284,7 +300,18 @@ Clevis automatically selects the best available TOML parser:
 
 ## Version Notes
 
-Current version: **0.1.0**
+### 0.2.0
+
+**New Features:**
+- `cli` parameter in `get_config()` - Control CLI argument parsing
+  - Set `cli=False` to disable CLI parsing (library mode, testing)
+  - Default `cli=True` preserves backward compatibility
+
+**Improvements:**
+- Better error messages when `cli=False` - omits CLI-related suggestions
+- Cleaner test setup without CLI interference
+
+### 0.1.0
 
 First public release. Core functionality includes:
 - Dataclass-based configuration schemas
@@ -292,6 +319,29 @@ First public release. Core functionality includes:
 - Layered configuration (user < project < CLI)
 - CLI argument generation from dataclass
 - Helpful error messages for missing fields
+
+## Migration Guides
+
+### From 0.1.x to 0.2.x
+
+No breaking changes. The new `cli` parameter is optional with default `True`.
+
+**New Optional Behavior:**
+
+If using Clevis in a library or test context where CLI parsing is not desired:
+
+```python
+# Before (0.1.x) - CLI parsing always happened
+config = get_config(Config, name="app")
+
+# After (0.2.x) - Disable CLI parsing when needed
+config = get_config(Config, name="app", cli=False)  # Library mode
+config = get_config(Config, name="app", cli=False, args=[])  # Testing
+```
+
+**Error Messages:**
+
+When `cli=False`, error messages no longer suggest CLI arguments (e.g., "try --database-host") since CLI is disabled.
 
 ## References
 
