@@ -8,11 +8,7 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Blockers for the next minor release.
 
-### Phase 3: Polish (P3 - Medium)
-
-Nice-to-have improvements for developer experience.
-
-- [ ] **P3-001: Add type stub files**
+- [ ] **P2-004: Add type stub files**
   - Create `src/clevis/__init__.pyi` with type stubs
   - Include all public functions, Factory, Parser Protocol, SubParser Protocol, ConfigError class
   - Verify mypy strict mode passes against the stubs
@@ -22,7 +18,7 @@ Nice-to-have improvements for developer experience.
     - mypy validates stubs cleanly
     - IDEs show improved autocomplete for clevis users
 
-- [ ] **P3-002: Add cookbook entries to docs**
+- [ ] **P2-005: Add cookbook entries to docs**
   - Add a "Cookbook" section to `docs/usage.rst` with practical patterns:
     - Nested configuration with environment overrides
     - Using `${VAR}` and `${VAR|default}` env var syntax
@@ -33,7 +29,7 @@ Nice-to-have improvements for developer experience.
     - At least 3 practical patterns are documented
     - Code examples are runnable and tested manually
 
-- [ ] **P3-003: Enhance subcommand support**
+- [ ] **P2-006: Enhance subcommand support**
   - Add `help` parameter to `@configclass(cmd="name", help="description")` for subcommand help text
   - Add `aliases` parameter to `@configclass(cmd="check", aliases=["chk", "c"])` for subcommand aliases
   - Pass help and aliases through to `subparsers.add_parser()`
@@ -42,6 +38,10 @@ Nice-to-have improvements for developer experience.
     - `@configclass(cmd="check", help="Run diagnostics")` shows help in `--help` output
     - `@configclass(cmd="check", aliases=["c"])` allows `python app.py c --verbose`
     - Tests cover help text and aliases
+
+### Phase 3: Polish (P3 - Medium)
+
+Optional improvements for future releases.
 
 - [ ] **P3-004: Achieve 90%+ test coverage**
   - Nice-to-have: bring coverage from current ~80% to ≥90%
