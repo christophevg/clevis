@@ -116,7 +116,7 @@ def _check_file_permissions(path: Path, action: SecurityAction) -> tuple[bool, i
   except SecurityError:
     # Don't close fd again - already closed before raising SecurityError
     raise
-  except:
+  except BaseException:
     # Close fd on any other exception
     os.close(fd)
     raise
@@ -356,7 +356,7 @@ def configclass(
   cmd: str | None = None,
   help: str | None = None,
   aliases: list[str] | None = None,
-) -> type | Callable[[type[T]], type[T]]:
+) -> type[T] | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
 
@@ -395,6 +395,18 @@ def configclass(
   def decorator(clz: type[T]) -> type[T]:
     clz = dataclass(clz)
     factory = get_factory(clz)  # get_factory upserts if not yet available
+
+    # Warn if help/aliases used without cmd
+    if not cmd:
+      if help is not None:
+        logger.warning(
+          f"@configclass parameter 'help' has no effect without 'cmd' on class {clz.__name__}"
+        )
+      if aliases is not None:
+        logger.warning(
+          f"@configclass parameter 'aliases' has no effect without 'cmd' on class {clz.__name__}"
+        )
+
     if cmd:
       factory.cmd = cmd
     if help is not None:
