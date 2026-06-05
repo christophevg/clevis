@@ -26,6 +26,7 @@ __version__ = "0.2.0"
 
 # Factory support
 
+
 class Parser(Protocol):
   """
   Protocol for argparse-compatible parsers.
@@ -42,26 +43,27 @@ class Parser(Protocol):
     type: Any = ...,
     help: str | None = ...,
     dest: str | None = ...,
-    **kwargs: Any
+    **kwargs: Any,
   ) -> Action:
     """Add an argument to the parser."""
     ...
 
-  def add_subparsers(self, **kwargs: Any) -> "SubParser":
-    ...
+  def add_subparsers(self, **kwargs: Any) -> "SubParser": ...
 
   def parse_args(self, args: list[str] | None = None) -> Namespace:
     """Parse arguments and return a Namespace."""
     ...
 
+
 class SubParser(Protocol):
-  def add_parser(self, name: str) -> Parser:
-    ...
+  def add_parser(self, name: str) -> Parser: ...
+
 
 # the default parser is assigned to Factories that aren't initialized with a parser
 _default_parser: argparse.ArgumentParser = argparse.ArgumentParser()
 
 _sub_parsers: dict[Parser, Any] = {}
+
 
 def get_sub_parser(parser: Parser) -> "SubParser":
   global _sub_parsers
@@ -71,6 +73,7 @@ def get_sub_parser(parser: Parser) -> "SubParser":
     _sub_parsers[parser] = parser.add_subparsers(dest="cmd")
     _sub_parsers[parser].required = True
     return _sub_parsers[parser]  # type: ignore[no-any-return]
+
 
 @dataclass
 class Factory:
@@ -86,13 +89,13 @@ class Factory:
     parser: The argparse-compatible parser to use.
   """
 
-  config_class : type
-  prefix : str | None = None
-  parser : Parser = field(default_factory=lambda: _default_parser)  # type: ignore[assignment]
-  cmd : str | None = None
-  sub_parser : Parser | None = field(init=False, default=None)
+  config_class: type
+  prefix: str | None = None
+  parser: Parser = field(default_factory=lambda: _default_parser)  # type: ignore[assignment]
+  cmd: str | None = None
+  sub_parser: Parser | None = field(init=False, default=None)
 
-  _configured : bool = False
+  _configured: bool = False
 
   def configure_parser(self) -> None:
     """
@@ -147,9 +150,7 @@ class Factory:
     return args_dict
 
   def list_fields(
-    self,
-    clz: type | None = None,
-    path: list[str] | None = None
+    self, clz: type | None = None, path: list[str] | None = None
   ) -> list[tuple[Field[Any], list[str]]]:
     """
     Recursively list all fields in nested dataclasses.
@@ -198,11 +199,12 @@ def get_factory(clz: type) -> Factory:
     _factories[clz] = Factory(clz)
     return _factories[clz]
 
-T = TypeVar('T')
+
+T = TypeVar("T")
+
 
 def configclass(
-  cls: type[T] | None = None,
-  cmd: str | None = None
+  cls: type[T] | None = None, cmd: str | None = None
 ) -> type | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
@@ -229,6 +231,7 @@ def configclass(
   Returns:
     The decorated class (now a dataclass).
   """
+
   def decorator(clz: type[T]) -> type[T]:
     clz = dataclass(clz)
     factory = get_factory(clz)  # get_factory upserts if not yet available
@@ -240,6 +243,7 @@ def configclass(
     return decorator(cls)
   else:
     return lambda clz: decorator(clz)
+
 
 def _reset_factories() -> None:
   """
@@ -278,6 +282,7 @@ def _ensure_configured(parser: Parser) -> Parser:
 # TOML Parser Selection
 # ---------------------
 # Tries parsers in this order: envtoml > tomlev > tomli > tomllib
+
 
 def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   """
@@ -430,6 +435,7 @@ def unpack_type(type_def: type) -> type:
     raise ValueError("Complex unions not supported")
   return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
 
+
 def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
   """
   Apply dotted command line arguments to a nested dictionary.
@@ -455,6 +461,7 @@ def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
       # set value
       scope[final_key] = value  # upsert key=value
 
+
 def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   """
   Get the active subcommand name from parsed arguments.
@@ -472,13 +479,14 @@ def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   cmd: str | None = parsed_args.pop("cmd", None)
   return cmd
 
+
 def get_config(
   clz: type[T],
   name: str = "project",
   user: bool = True,
   project: bool = True,
   cli: bool = True,
-  args: list[str] | None = None # used for testing, simulating sys.argv
+  args: list[str] | None = None,  # used for testing, simulating sys.argv
 ) -> T:
   """
   Load configuration from TOML files and CLI arguments.
@@ -545,7 +553,7 @@ def get_config(
       field_path=field_path,
       config_name=name,
       suggest_cli=cli,
-    ) from e
+    ) from None
   except WrongTypeError as e:
     # Extract field path and type info from dacite error
     error_msg = str(e)
@@ -558,7 +566,7 @@ def get_config(
       field_path=field_path,
       config_name=name,
       suggest_cli=cli,
-    ) from e
+    ) from None
   except DaciteError as e:
     # Catch any other dacite errors
     raise ConfigError(
@@ -566,7 +574,41 @@ def get_config(
       field_path="unknown",
       config_name=name,
       suggest_cli=cli,
-    ) from e
+    ) from None
+  except TypeError as e:
+    # Catch TypeError from dacite when default_factory fails
+    # (e.g., required field in nested dataclass)
+    # Try to extract field name from error message
+    error_msg = str(e)
+    # Format: "DatabaseConfig.__init__() missing 1 required positional argument: 'host'"
+    if "required positional argument:" in error_msg:
+      # Extract the class name and argument name
+      import re
+
+      match = re.search(r"(\w+)\.__init__\(\).*missing.*argument: '(\w+)'", error_msg)
+      if match:
+        class_name = match.group(1)
+        arg_name = match.group(2)
+        # Try to find the matching field in the dataclass
+        for f in fields(clz):
+          if is_dataclass(f.type):
+            concrete_type = unpack_type(f.type)
+            if concrete_type.__name__ == class_name:
+              field_path = f"{f.name}.{arg_name}"
+              raise ConfigError(
+                message=f"Required nested field '{arg_name}' has no value",
+                field_path=field_path,
+                config_name=name,
+                suggest_cli=cli,
+              ) from None
+    # Fallback if we can't parse the error
+    raise ConfigError(
+      message=f"Configuration initialization error: {error_msg}",
+      field_path="unknown",
+      config_name=name,
+      suggest_cli=cli,
+    ) from None
+
 
 __all__ = [
   "Factory",
