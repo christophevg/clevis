@@ -8,58 +8,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Blockers for the next minor release.
 
-- [ ] **P2-001: Implement Factory Pattern for Multi-Module Configuration** (GitHub #3)
-  - The Factory pattern enables four use cases:
-    1. **Simple case**: Direct `get_config()` call with auto-discovered parser
-    2. **Module development**: Pre-register configs with `@configclass` decorator
-    3. **Multi-module orchestration**: Shared parser with prefixes, custom parser injection
-    4. **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
-
-  - **Implementation Requirements**:
-    - Add `@configclass` decorator that applies `@dataclass` and registers with factory
-    - Add `get_factory(Config)` to access Factory for customization
-    - Add `Factory` dataclass with `config_class`, `prefix`, `parser`, `cmd` attributes
-    - Add `Factory.configure_parser()` to lazily add arguments to parser
-    - Add `Factory.get_args()` to parse and return dict with dotted keys
-    - Add `Factory.list_fields()` to expose field structure
-    - Add `Parser` Protocol for pluggable parsers (argparse-compatible)
-    - Add `SubParser` Protocol for subparser operations
-    - Add `get_cmd()` to return active subcommand name
-    - Add `get_sub_parser(parser)` to create or return existing subparser
-    - Lazy parser configuration on first `get_config()` call
-    - Support multiple configs sharing one parser
-    - Support subcommands via `@configclass(cmd="name")`
-    - Prefix stripping in `Factory.get_args()` when prefix is set
-    - Add `_reset_factories()` for test isolation (must also reset `_sub_parsers`)
-
-  - **Code Quality Fixes Required**:
-    - Fix duplicate import: `typing.Callable` imported at line 20 and line 202 (R50)
-    - Ensure `_reset_factories()` resets `_sub_parsers` global (R51)
-    - Add return type `-> SubParser` to `Parser.add_subparsers()` in Protocol
-
-  - **Breaking Changes** (acceptable in 0.x):
-    - `list_fields()` is now `Factory.list_fields()` method (not module-level function)
-
-  - **GitHub Issue**: #3
-  - **Satisfies**: R20-R33, R50-R51, R79-R90
-  - **Acceptance**:
-    - `@configclass` decorator works and registers factory
-    - `@configclass(cmd="check")` registers as subcommand
-    - `get_factory(MyConfig)` returns same Factory instance for same class
-    - `factory.prefix = "app1"` causes CLI args to be `--app1-name`
-    - `factory.cmd = "check"` creates subparser for "check" command
-    - `get_cmd()` returns active subcommand name
-    - Multiple factories can share one parser for orchestrated CLI
-    - Multiple subcommands work together in single CLI app
-    - `factory.get_args()` returns dict with dotted keys (prefix stripped if set)
-    - `examples/factory.py` demonstrates simple, module, orchestration use cases
-    - `examples/commands.py` demonstrates subcommand use case
-    - Tests cover: decorator, singleton, prefix, shared parser, lazy config, get_args, subcommands
-    - Documentation updated with Factory pattern and subcommand sections
-    - No debug print statements in production code
-    - `_reset_factories()` clears all globals including `_sub_parsers`
-    - No duplicate imports
-
 - [ ] **P2-002: Add security parameter to `get_config()`** (GitHub #4)
   - Add optional `security` argument to `get_config()` function
   - Default security policy: maximally strict (reject on security issues)
@@ -158,6 +106,58 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-001: Implement Factory Pattern for Multi-Module Configuration** ✅ 2026-06-05 (PR #5)
+  - The Factory pattern enables four use cases:
+    1. **Simple case**: Direct `get_config()` call with auto-discovered parser
+    2. **Module development**: Pre-register configs with `@configclass` decorator
+    3. **Multi-module orchestration**: Shared parser with prefixes, custom parser injection
+    4. **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
+
+  - **Implementation Requirements**:
+    - Add `@configclass` decorator that applies `@dataclass` and registers with factory
+    - Add `get_factory(Config)` to access Factory for customization
+    - Add `Factory` dataclass with `config_class`, `prefix`, `parser`, `cmd` attributes
+    - Add `Factory.configure_parser()` to lazily add arguments to parser
+    - Add `Factory.get_args()` to parse and return dict with dotted keys
+    - Add `Factory.list_fields()` to expose field structure
+    - Add `Parser` Protocol for pluggable parsers (argparse-compatible)
+    - Add `SubParser` Protocol for subparser operations
+    - Add `get_cmd()` to return active subcommand name
+    - Add `get_sub_parser(parser)` to create or return existing subparser
+    - Lazy parser configuration on first `get_config()` call
+    - Support multiple configs sharing one parser
+    - Support subcommands via `@configclass(cmd="name")`
+    - Prefix stripping in `Factory.get_args()` when prefix is set
+    - Add `_reset_factories()` for test isolation (must also reset `_sub_parsers`)
+
+  - **Code Quality Fixes Required**:
+    - Fix duplicate import: `typing.Callable` imported at line 20 and line 202 (R50)
+    - Ensure `_reset_factories()` resets `_sub_parsers` global (R51)
+    - Add return type `-> SubParser` to `Parser.add_subparsers()` in Protocol
+
+  - **Breaking Changes** (acceptable in 0.x):
+    - `list_fields()` is now `Factory.list_fields()` method (not module-level function)
+
+  - **GitHub Issue**: #3
+  - **Satisfies**: R20-R33, R50-R51, R79-R90
+  - **Acceptance**:
+    - `@configclass` decorator works and registers factory
+    - `@configclass(cmd="check")` registers as subcommand
+    - `get_factory(MyConfig)` returns same Factory instance for same class
+    - `factory.prefix = "app1"` causes CLI args to be `--app1-name`
+    - `factory.cmd = "check"` creates subparser for "check" command
+    - `get_cmd()` returns active subcommand name
+    - Multiple factories can share one parser for orchestrated CLI
+    - Multiple subcommands work together in single CLI app
+    - `factory.get_args()` returns dict with dotted keys (prefix stripped if set)
+    - `examples/factory.py` demonstrates simple, module, orchestration use cases
+    - `examples/commands.py` demonstrates subcommand use case
+    - Tests cover: decorator, singleton, prefix, shared parser, lazy config, get_args, subcommands
+    - Documentation updated with Factory pattern and subcommand sections
+    - No debug print statements in production code
+    - `_reset_factories()` clears all globals including `_sub_parsers`
+    - No duplicate imports
 
 - [x] **P1-003: Make CLI support optional** ✅ 2026-05-30 (PR #2)
   - Added `cli=False` parameter to `get_config()` to skip sys.args handling
