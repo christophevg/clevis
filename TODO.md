@@ -4,41 +4,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 ## Backlog
 
-### Phase 2: Quality & Features (P2 - High)
-
-Blockers for the next minor release.
-
-- [ ] **P2-004: Add type stub files**
-  - Create `src/clevis/__init__.pyi` with type stubs
-  - Include all public functions, Factory, Parser Protocol, SubParser Protocol, ConfigError class
-  - Verify mypy strict mode passes against the stubs
-  - **Satisfies**: R49
-  - **Acceptance**:
-    - `src/clevis/__init__.pyi` exists with type information
-    - mypy validates stubs cleanly
-    - IDEs show improved autocomplete for clevis users
-
-- [ ] **P2-005: Add cookbook entries to docs**
-  - Add a "Cookbook" section to `docs/usage.rst` with practical patterns:
-    - Nested configuration with environment overrides
-    - Using `${VAR}` and `${VAR|default}` env var syntax
-    - Custom validation via `__post_init__` (with the `server_url` example from `main.py`)
-  - **Satisfies**: R58
-  - **Acceptance**:
-    - `docs/usage.rst` has a Cookbook section
-    - At least 3 practical patterns are documented
-    - Code examples are runnable and tested manually
-
-- [ ] **P2-006: Enhance subcommand support**
-  - Add `help` parameter to `@configclass(cmd="name", help="description")` for subcommand help text
-  - Add `aliases` parameter to `@configclass(cmd="check", aliases=["chk", "c"])` for subcommand aliases
-  - Pass help and aliases through to `subparsers.add_parser()`
-  - **Satisfies**: R59-R60
-  - **Acceptance**:
-    - `@configclass(cmd="check", help="Run diagnostics")` shows help in `--help` output
-    - `@configclass(cmd="check", aliases=["c"])` allows `python app.py c --verbose`
-    - Tests cover help text and aliases
-
 ### Phase 3: Polish (P3 - Medium)
 
 Optional improvements for future releases.
@@ -83,6 +48,37 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-006: Enhance subcommand support** ✅ 2026-06-05 (PR #9)
+  - Add `help` parameter to `@configclass(cmd="name", help="description")` for subcommand help text
+  - Add `aliases` parameter to `@configclass(cmd="check", aliases=["chk", "c"])` for subcommand aliases
+  - Pass help and aliases through to `subparsers.add_parser()`
+  - **Satisfies**: R59-R60
+  - **Acceptance**:
+    - `@configclass(cmd="check", help="Run diagnostics")` shows help in `--help` output
+    - `@configclass(cmd="check", aliases=["c"])` allows `python app.py c --verbose`
+    - Tests cover help text and aliases
+
+- [x] **P2-005: Add cookbook entries to docs** ✅ 2026-06-05 (PR #8)
+  - Add a "Cookbook" section to `docs/usage.rst` with practical patterns:
+    - Nested configuration with environment overrides
+    - Using `${VAR}` and `${VAR|default}` env var syntax
+    - Custom validation via `__post_init__` (with the `server_url` example from `main.py`)
+  - **Satisfies**: R58
+  - **Acceptance**:
+    - `docs/usage.rst` has a Cookbook section
+    - At least 3 practical patterns are documented
+    - Code examples are runnable and tested manually
+
+- [x] **P2-004: Add type stub files** ✅ 2026-06-05 (PR #7)
+  - Create `src/clevis/__init__.pyi` with type stubs
+  - Include all public functions, Factory, Parser Protocol, SubParser Protocol, ConfigError class
+  - Verify mypy strict mode passes against the stubs
+  - **Satisfies**: R49
+  - **Acceptance**:
+    - `src/clevis/__init__.pyi` exists with type information
+    - mypy validates stubs cleanly
+    - IDEs show improved autocomplete for clevis users
 
 - [x] **P2-003: Resolve `project.toml` repository file** ✅ 2026-06-05
   - Moved `project.toml` to `examples/project.toml` as part of P2-001 implementation
