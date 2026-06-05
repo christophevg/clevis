@@ -8,22 +8,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Blockers for the next minor release.
 
-- [ ] **P2-002: Add security parameter to `get_config()`** (GitHub #4)
-  - Add optional `security` argument to `get_config()` function
-  - Default security policy: maximally strict (reject on security issues)
-  - Per-check options: Don't Check | Log | Reject
-  - Implement configuration file permission validation (group/other readable)
-  - Implement parent directory security validation (world-writable)
-  - Out of scope: validation support (dataclasses handle this)
-  - **GitHub Issue**: #4
-  - **Satisfies**: R39-R43
-  - **Acceptance**:
-    - `get_config(..., security={...})` parameter works
-    - Default behavior rejects insecure configurations
-    - Individual checks can be configured (Don't Check, Log, Reject)
-    - Configuration file permission validation implemented and tested
-    - Directory security validation implemented and tested
-
 - [ ] **P2-003: Resolve `project.toml` repository file**
   - File in repository root appears to be a test/example configuration
   - Either move to `examples/` directory with a clear purpose, or add to `.gitignore`
@@ -106,6 +90,22 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-002: Add security parameter to `get_config()`** ✅ 2026-06-05 (PR #6)
+  - Add optional `security` argument to `get_config()` function
+  - Default security policy: maximally strict (reject on security issues)
+  - Per-check options: Don't Check | Log | Reject
+  - Implement configuration file permission validation (group/other readable)
+  - Implement parent directory security validation (world-writable)
+  - Out of scope: validation support (dataclasses handle this)
+  - **GitHub Issue**: #4
+  - **Satisfies**: R39-R43
+  - **Acceptance**:
+    - `get_config(..., security={...})` parameter works
+    - Default behavior rejects insecure configurations
+    - Individual checks can be configured (Don't Check, Log, Reject)
+    - Configuration file permission validation implemented and tested
+    - Directory security validation implemented and tested
 
 - [x] **P2-001: Implement Factory Pattern for Multi-Module Configuration** ✅ 2026-06-05 (PR #5)
   - The Factory pattern enables four use cases:
