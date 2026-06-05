@@ -187,12 +187,109 @@ Load configuration from TOML files and CLI arguments.
 - `project` — Load project-level config (`./{name}.toml`)
 - `cli` — Parse CLI arguments from `sys.argv` (default: `True`)
 - `args` — CLI arguments (defaults to `sys.argv[1:]` when `cli=True`)
+- `security` — Security check configuration (default: maximally strict)
 
 **Returns:** Instance of the dataclass with merged configuration
 
 **Raises:**
 - `ConfigError` — Missing required fields or wrong types
+- `SecurityError` — Security check failed (when `action="reject"`)
 - `ImportError` — No TOML parser available
+
+## Security
+
+Clevis validates configuration file security by default:
+
+- **File permissions** — Rejects files readable by group/other (mode 0o644, 0o755, etc.)
+- **Directory permissions** — Rejects files in world-writable directories
+
+This protects against symlink attacks and accidental credential exposure.
+
+### Default Behavior (Maximally Strict)
+
+```python
+# Default: reject insecure configurations
+config = get_config(Config, name="myapp")
+```
+
+### Disable Checks
+
+For trusted environments (containers, development):
+
+```python
+from clevis import get_config, SecurityAction
+
+# Skip all security checks
+config = get_config(
+    Config,
+    name="myapp",
+    security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK
+    }
+)
+```
+
+### Log Warnings
+
+For development with monitoring:
+
+```python
+from clevis import get_config, SecurityAction
+
+# Log warnings instead of rejecting
+config = get_config(
+    Config,
+    name="myapp",
+    security={
+        "file_permissions": SecurityAction.LOG,
+        "directory_permissions": SecurityAction.LOG
+    }
+)
+```
+
+### Fine-Grained Control
+
+```python
+from clevis import get_config, SecurityAction
+
+# Check file permissions, ignore directory
+config = get_config(
+    Config,
+    name="myapp",
+    security={
+        "file_permissions": SecurityAction.REJECT,
+        "directory_permissions": SecurityAction.DONT_CHECK
+    }
+)
+```
+
+### Security Actions
+
+| Action | Behavior |
+|--------|----------|
+| `SecurityAction.DONT_CHECK` | Skip validation |
+| `SecurityAction.LOG` | Log warning, continue |
+| `SecurityAction.REJECT` | Raise `SecurityError` (default) |
+
+### Fixing Security Issues
+
+**File permissions:**
+```bash
+# Secure: owner read/write only
+chmod 600 ~/.myapp.toml
+```
+
+**Directory permissions:**
+```bash
+# Move config from world-writable location
+mv /tmp/myapp.toml ~/.myapp.toml
+```
+
+### Trusted Locations
+
+- User's home directory (`~/.myapp.toml`) — directory check is skipped
+- Non-existent files — all checks are skipped
 
 ## Error Messages
 
@@ -271,3 +368,4 @@ MIT
 [tomli]: https://github.com/hukkin/tomli
 [envtoml]: https://github.com/sank8m/envtoml
 [tomlev]: https://github.com/thesimj/tomlev
+

@@ -13,16 +13,149 @@ TOML Parser Selection (priority order):
 
 import argparse
 import functools
+import logging
+import os
+import stat
 from argparse import Action, Namespace
 from collections.abc import Callable
 from dataclasses import Field, dataclass, field, fields, is_dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol, TypeVar, get_args
+from typing import Any, Protocol, TypedDict, TypeVar, get_args
 
 from dacite import from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
 
 __version__ = "0.2.0"
+
+logger = logging.getLogger(__name__)
+
+
+# Security Types
+
+
+class SecurityAction(Enum):
+  """Action to take when security check fails."""
+
+  DONT_CHECK = "dont_check"
+  LOG = "log"
+  REJECT = "reject"
+
+
+class SecurityConfig(TypedDict, total=False):
+  """Configuration for security checks."""
+
+  file_permissions: SecurityAction
+  directory_permissions: SecurityAction
+
+
+class SecurityError(Exception):
+  """Raised when a security check fails."""
+
+  def __init__(self, message: str, path: str, check: str) -> None:
+    self.path = path
+    self.check = check
+    super().__init__(message)
+
+
+def _check_file_permissions(
+  path: Path, action: SecurityAction
+) -> tuple[bool, int | None]:
+  """Check if file has secure permissions (owner-only readable).
+
+  Uses file descriptor to prevent TOCTOU race condition between
+  permission check and file read.
+
+  Args:
+    path: Path to configuration file
+    action: Security action to take if check fails
+
+  Returns:
+    Tuple of (check_passed, file_descriptor):
+    - check_passed: True if check passes or is skipped
+    - file_descriptor: Opened file descriptor if file exists and check passes,
+      None if file doesn't exist or check is skipped
+
+  Raises:
+    SecurityError: If action is REJECT and check fails
+
+  Note:
+    If file_descriptor is returned (not None), caller MUST close it
+    after use to avoid resource leaks.
+  """
+  if action == SecurityAction.DONT_CHECK:
+    if path.exists():
+      # Open file without security check when DONT_CHECK
+      return True, os.open(path, os.O_RDONLY)
+    return True, None
+
+  if not path.exists():
+    return True, None
+
+  try:
+    # Open file to get file descriptor - prevents TOCTOU
+    fd = os.open(path, os.O_RDONLY)
+  except FileNotFoundError:
+    # File was deleted between exists() and open()
+    return True, None
+
+  try:
+    st = os.fstat(fd)
+    mode = st.st_mode
+    # Check if group or other can read
+    if mode & (stat.S_IRGRP | stat.S_IROTH):
+      msg = (
+        f"Configuration file {path} is readable by group/other "
+        f"(mode {oct(mode & 0o777)}). "
+        f"Use 'chmod 600 {path}' to fix."
+      )
+      if action == SecurityAction.REJECT:
+        os.close(fd)
+        raise SecurityError(msg, str(path), "file_permissions")
+      elif action == SecurityAction.LOG:
+        logger.warning(msg)
+    return True, fd
+  except SecurityError:
+    # Don't close fd again - already closed before raising SecurityError
+    raise
+  except:
+    # Close fd on any other exception
+    os.close(fd)
+    raise
+
+
+def _check_directory_permissions(path: Path, action: SecurityAction) -> bool:
+  """Check if parent directory is world-writable.
+
+  Returns True if check passes or is skipped.
+  Raises SecurityError if action is REJECT and check fails.
+  Logs warning if action is LOG and check fails.
+  """
+  if action == SecurityAction.DONT_CHECK:
+    return True
+
+  parent = path.parent
+  if not parent.exists():
+    return True  # No directory to check
+
+  # Home directory is trusted
+  if parent == Path.home() or str(parent).startswith(str(Path.home())):
+    return True
+
+  mode = parent.stat().st_mode
+  # Check if world-writable
+  if mode & stat.S_IWOTH:
+    msg = (
+      f"Directory {parent} is world-writable "
+      f"(mode {oct(mode & 0o777)}). "
+      f"This allows symlink attacks. Move config to a secure location."
+    )
+    if action == SecurityAction.REJECT:
+      raise SecurityError(msg, str(parent), "directory_permissions")
+    elif action == SecurityAction.LOG:
+      logger.warning(msg)
+  return True
+
 
 # Factory support
 
@@ -366,6 +499,24 @@ def _load_toml(file: Any) -> dict[str, Any]:
   return _toml_load(file)
 
 
+def _load_toml_from_fd(fd: int) -> dict[str, Any]:
+  """
+  Load TOML from a file descriptor.
+
+  Wraps the file descriptor in a file object for TOML parser.
+  Does NOT close the file descriptor - caller's responsibility.
+
+  Args:
+      fd: File descriptor opened in read mode
+
+  Returns:
+      Dictionary of parsed TOML data
+  """
+  file_obj = os.fdopen(fd, "rb")
+  # File object takes ownership of fd and will close it
+  return _load_toml(file_obj)
+
+
 class ConfigError(Exception):
   """Raised when configuration is missing or invalid."""
 
@@ -487,6 +638,7 @@ def get_config(
   project: bool = True,
   cli: bool = True,
   args: list[str] | None = None,  # used for testing, simulating sys.argv
+  security: SecurityConfig | None = None,
 ) -> T:
   """
   Load configuration from TOML files and CLI arguments.
@@ -511,27 +663,58 @@ def get_config(
       project: Whether to load project-level config (./{name}.toml)
       cli: Whether to parse CLI arguments from sys.argv (default: True)
       args: Optional list of CLI arguments (overrides sys.argv when provided)
+      security: Security check configuration. If None, defaults to maximally
+          strict (reject on all security issues).
 
   Returns:
       An instance of the dataclass with merged configuration
 
   Raises:
       ConfigError: If required fields are missing or values have wrong type
+      SecurityError: If security checks fail (when action="reject")
       ImportError: If no TOML parser is available
   """
+  # Default security: reject all
+  if security is None:
+    security = {
+      "file_permissions": SecurityAction.REJECT,
+      "directory_permissions": SecurityAction.REJECT,
+    }
+
   cfg: dict[str, Any] = {}
 
-  # Load user-level config
-  if user:
-    user_path = Path.home() / f".{name}.toml"
-    if user_path.exists():
-      cfg.update(_load_toml(user_path.open("rb")))
+  # Get config file paths
+  user_config = Path.home() / f".{name}.toml"
+  project_config = Path.cwd() / f"{name}.toml"
 
-  # Load project-level config
+  # Validate security and load config files
+  # Note: TOCTOU-safe file permission checks
+  file_action = security.get("file_permissions", SecurityAction.REJECT)
+  dir_action = security.get("directory_permissions", SecurityAction.REJECT)
+
+  # Check directory permissions (not TOCTOU-critical)
+  _check_directory_permissions(user_config, dir_action)
+  _check_directory_permissions(project_config, dir_action)
+
+  # Load user-level config (TOCTOU-safe)
+  if user:
+    _, user_fd = _check_file_permissions(user_config, file_action)
+    if user_fd is not None:
+      try:
+        cfg.update(_load_toml_from_fd(user_fd))
+      finally:
+        # fd is closed by _load_toml_from_fd via file object
+        pass
+
+  # Load project-level config (TOCTOU-safe)
   if project:
-    project_path = Path.cwd() / f"{name}.toml"
-    if project_path.exists():
-      cfg.update(_load_toml(project_path.open("rb")))
+    _, project_fd = _check_file_permissions(project_config, file_action)
+    if project_fd is not None:
+      try:
+        cfg.update(_load_toml_from_fd(project_fd))
+      finally:
+        # fd is closed by _load_toml_from_fd via file object
+        pass
 
   # Parse CLI args if requested and merge them into the config
   if cli or args is not None:
@@ -614,6 +797,9 @@ __all__ = [
   "Factory",
   "Parser",
   "SubParser",
+  "SecurityAction",
+  "SecurityConfig",
+  "SecurityError",
   "get_factory",
   "configclass",
   "get_config",
@@ -623,3 +809,4 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+
