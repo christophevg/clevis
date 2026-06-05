@@ -1,9 +1,11 @@
 """
-Example usage of the clevis configuration module.
+Example usage of the clevis configuration module with subcommands.
 
 Run with:
-    uv run python commands.py
-    uv run python commands.py check
+    uv run python commands.py --help
+    uv run python commands.py check --help
+    uv run python commands.py c --verbose      # Using alias 'c' for 'check'
+    uv run python commands.py chk --verbose    # Using alias 'chk' for 'check'
 """
 
 from rich.pretty import pprint
@@ -11,12 +13,12 @@ from rich.pretty import pprint
 from clevis import configclass, get_cmd, get_config, SecurityAction
 
 
-@configclass(cmd="check")
+@configclass(cmd="check", help="Run diagnostics", aliases=["c", "chk"])
 class CheckConfig:
   verbose: bool = False
 
 
-@configclass(cmd="print")
+@configclass(cmd="print", help="Print configuration", aliases=["p"])
 class PrintConfig:
   rich: bool = False
 
@@ -33,3 +35,4 @@ if __name__ == "__main__":
       pprint(config)
     else:
       print(config)
+

@@ -67,7 +67,15 @@ class Parser(Protocol):
 class SubParser(Protocol):
   """Protocol for sub-parser management."""
 
-  def add_parser(self, name: str) -> Parser: ...
+  def add_parser(
+    self,
+    name: str,
+    help: str | None = ...,
+    aliases: list[str] | None = ...,
+    **kwargs: Any,
+  ) -> Parser:
+    """Add a subparser with optional help and aliases."""
+    ...
 
 # Classes
 
@@ -84,6 +92,8 @@ class Factory:
   prefix: str | None = None
   parser: Parser = ...
   cmd: str | None = None
+  help: str | None = None
+  aliases: list[str] | None = None
   sub_parser: Parser | None = ...
 
   _configured: bool = False
@@ -258,7 +268,10 @@ def unpack_type(type_def: type) -> type:
   ...
 
 def configclass(
-  cls: type[T] | None = None, cmd: str | None = None
+  cls: type[T] | None = None,
+  cmd: str | None = None,
+  help: str | None = None,
+  aliases: list[str] | None = None,
 ) -> type | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
@@ -282,6 +295,8 @@ def configclass(
   Args:
     cls: The class to decorate (when used without parentheses)
     cmd: Optional subcommand name for this config
+    help: Optional help text for the subcommand
+    aliases: Optional list of alternative names for the subcommand
 
   Returns:
     The decorated class (now a dataclass).

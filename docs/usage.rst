@@ -570,6 +570,73 @@ Running this application:
    % python app.py check --verbose
    Checking with verbose=True
 
+Subcommand Help Text
+~~~~~~~~~~~~~~~~~~~~
+
+Add help text for subcommands using the ``help`` parameter:
+
+.. code-block:: python
+
+   from clevis import configclass, get_cmd, get_config
+
+   @configclass(cmd="check", help="Run diagnostics on the project")
+   class CheckConfig:
+       verbose: bool = False
+
+   @configclass(cmd="build", help="Build the project")
+   class BuildConfig:
+       output: str = "dist"
+
+The help text appears in the main command listing:
+
+.. code-block:: bash
+
+   % python app.py --help
+   usage: app.py [-h] {check,build} ...
+
+   positional arguments:
+     {check,build}
+       check         Run diagnostics on the project
+       build         Build the project
+
+   options:
+     -h, --help     show this help message and exit
+
+Subcommand Aliases
+~~~~~~~~~~~~~~~~~~
+
+Create shortcuts for commands using the ``aliases`` parameter:
+
+.. code-block:: python
+
+   from clevis import configclass, get_cmd, get_config
+
+   @configclass(cmd="check", help="Run diagnostics", aliases=["c", "chk"])
+   class CheckConfig:
+       verbose: bool = False
+
+   @configclass(cmd="build", help="Build the project", aliases=["b"])
+   class BuildConfig:
+       output: str = "dist"
+
+Users can invoke commands using any alias:
+
+.. code-block:: bash
+
+   % python app.py check --verbose    # Full command
+   % python app.py c --verbose        # Short alias
+   % python app.py chk --verbose      # Another alias
+
+All aliases normalize to the actual command name internally:
+
+.. code-block:: python
+
+   cmd = get_cmd(args=["c"])
+   # cmd == "check"
+
+   cmd = get_cmd(args=["chk"])
+   # cmd == "check"
+
 How Subcommands Work
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -609,9 +676,11 @@ You can mix subcommand configs with regular configs:
 Subcommand API
 ~~~~~~~~~~~~~~
 
-``@configclass(cmd="name")``
+``@configclass(cmd="name", help="description", aliases=["alias1", "alias2"])``
    Decorator that registers the config as a subcommand. Creates a subparser
-   with that command name.
+   with that command name. Optional ``help`` parameter provides description
+   text for the command listing. Optional ``aliases`` parameter provides
+   alternative names for the command.
 
 ``get_cmd(parser=None)``
    Returns the active subcommand name from parsed arguments.

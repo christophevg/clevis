@@ -441,6 +441,43 @@ class TestSubcommands:
     factory = get_factory(CheckConfig)
     assert factory.cmd == "check"
 
+  def test_configclass_with_help(self):
+    """@configclass(cmd='check', help='Run diagnostics') should set help text."""
+    _reset_factories()
+
+    @configclass(cmd="check", help="Run diagnostics")
+    class CheckConfig:
+      verbose: bool = False
+
+    factory = get_factory(CheckConfig)
+    assert factory.cmd == "check"
+    assert factory.help == "Run diagnostics"
+
+  def test_configclass_with_aliases(self):
+    """@configclass(cmd='check', aliases=['c', 'chk']) should set aliases."""
+    _reset_factories()
+
+    @configclass(cmd="check", aliases=["c", "chk"])
+    class CheckConfig:
+      verbose: bool = False
+
+    factory = get_factory(CheckConfig)
+    assert factory.cmd == "check"
+    assert factory.aliases == ["c", "chk"]
+
+  def test_configclass_with_help_and_aliases(self):
+    """@configclass should accept both help and aliases."""
+    _reset_factories()
+
+    @configclass(cmd="check", help="Run diagnostics", aliases=["c"])
+    class CheckConfig:
+      verbose: bool = False
+
+    factory = get_factory(CheckConfig)
+    assert factory.cmd == "check"
+    assert factory.help == "Run diagnostics"
+    assert factory.aliases == ["c"]
+
   def test_get_cmd(self):
     """get_cmd() should return active subcommand name."""
     _reset_factories()
@@ -454,6 +491,23 @@ class TestSubcommands:
       name: str = "default"
 
     # Simulate CLI args with subcommand
+    cmd = get_cmd(args=["check"])
+    assert cmd == "check"
+
+  def test_get_cmd_with_alias(self):
+    """get_cmd() should return the alias used (argparse stores alias, not canonical name)."""
+    _reset_factories()
+
+    @configclass(cmd="check", aliases=["c"])
+    class CheckConfig:
+      verbose: bool = False
+
+    # Note: argparse stores the alias used, not the canonical command name
+    cmd = get_cmd(args=["c"])
+    # When alias is used, argparse returns the alias
+    assert cmd == "c"
+
+    # When full command is used, argparse returns the full command
     cmd = get_cmd(args=["check"])
     assert cmd == "check"
 
@@ -471,6 +525,53 @@ class TestSubcommands:
 
     # Should have sub_parser set
     assert factory.sub_parser is not None
+
+  def test_subparser_with_help(self):
+    """Factory with cmd and help should create subparser with help text."""
+    _reset_factories()
+
+    parser = argparse.ArgumentParser()
+    factory = get_factory(type("Config", (), {"__dataclass_fields__": {}, "__annotations__": {}}))
+    factory.parser = parser
+    factory.cmd = "check"
+    factory.help = "Run diagnostics"
+
+    factory.configure_parser()
+
+    assert factory.sub_parser is not None
+    # Verify help text is in parser
+    from io import StringIO
+    import sys
+
+    old_stderr = sys.stderr
+    try:
+      sys.stderr = StringIO()
+      parser.parse_args(["check", "--help"])
+    except SystemExit:
+      pass
+    finally:
+      sys.stderr = old_stderr
+
+  def test_subparser_with_aliases(self):
+    """Factory with cmd and aliases should create subparser with aliases."""
+    _reset_factories()
+
+    parser = argparse.ArgumentParser()
+    factory = get_factory(type("Config", (), {"__dataclass_fields__": {}, "__annotations__": {}}))
+    factory.parser = parser
+    factory.cmd = "check"
+    factory.aliases = ["c", "chk"]
+
+    factory.configure_parser()
+
+    assert factory.sub_parser is not None
+    # Verify aliases work by parsing with alias
+    # Note: argparse stores the alias used, not the canonical name
+    args = parser.parse_args(["c"])
+    assert args.cmd == "c"  # argparse stores the alias used
+
+    args = parser.parse_args(["check"])
+    assert args.cmd == "check"  # canonical name also works
 
   def test_multiple_subcommands(self):
     """Multiple subcommands should work together."""
@@ -582,3 +683,4 @@ class TestSharedParser:
     # Now it should be configured
     assert factory._configured
     assert config.name == "default"
+

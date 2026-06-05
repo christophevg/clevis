@@ -58,9 +58,7 @@ class SecurityError(Exception):
     super().__init__(message)
 
 
-def _check_file_permissions(
-  path: Path, action: SecurityAction
-) -> tuple[bool, int | None]:
+def _check_file_permissions(path: Path, action: SecurityAction) -> tuple[bool, int | None]:
   """Check if file has secure permissions (owner-only readable).
 
   Uses file descriptor to prevent TOCTOU race condition between
@@ -189,7 +187,13 @@ class Parser(Protocol):
 
 
 class SubParser(Protocol):
-  def add_parser(self, name: str) -> Parser: ...
+  def add_parser(
+    self,
+    name: str,
+    help: str | None = ...,
+    aliases: list[str] | None = ...,
+    **kwargs: Any,
+  ) -> Parser: ...
 
 
 # the default parser is assigned to Factories that aren't initialized with a parser
@@ -220,12 +224,17 @@ class Factory:
     config_class: The dataclass type this factory configures.
     prefix: Optional CLI argument prefix (e.g., "app1" -> "--app1-name").
     parser: The argparse-compatible parser to use.
+    cmd: Optional subcommand name for CLI applications with multiple commands.
+    help: Optional help text for the subcommand (used with cmd parameter).
+    aliases: Optional list of aliases for the subcommand (used with cmd parameter).
   """
 
   config_class: type
   prefix: str | None = None
   parser: Parser = field(default_factory=lambda: _default_parser)  # type: ignore[assignment]
   cmd: str | None = None
+  help: str | None = None
+  aliases: list[str] | None = None
   sub_parser: Parser | None = field(init=False, default=None)
 
   _configured: bool = False
@@ -239,7 +248,13 @@ class Factory:
     if self._configured:
       return
     if self.cmd:
-      self.sub_parser = get_sub_parser(self.parser).add_parser(self.cmd)
+      # Build kwargs for add_parser with optional help and aliases
+      add_parser_kwargs: dict[str, Any] = {}
+      if self.help is not None:
+        add_parser_kwargs["help"] = self.help
+      if self.aliases is not None:
+        add_parser_kwargs["aliases"] = self.aliases
+      self.sub_parser = get_sub_parser(self.parser).add_parser(self.cmd, **add_parser_kwargs)
     self._configured = True
     for f, path in self.list_fields():
       name = ".".join(path + [f.name])  # concat intermediate classes with "."
@@ -337,7 +352,10 @@ T = TypeVar("T")
 
 
 def configclass(
-  cls: type[T] | None = None, cmd: str | None = None
+  cls: type[T] | None = None,
+  cmd: str | None = None,
+  help: str | None = None,
+  aliases: list[str] | None = None,
 ) -> type | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
@@ -358,8 +376,17 @@ def configclass(
 
     get_factory(MyConfig)  # register
 
+  For subcommands::
+
+    @configclass(cmd="check", help="Run diagnostics", aliases=["c", "chk"])
+    class CheckConfig:
+      verbose: bool = False
+
   Args:
-    clz: The class to decorate.
+    cls: The class to decorate.
+    cmd: Optional subcommand name for CLI applications with multiple commands.
+    help: Optional help text for the subcommand (used with cmd parameter).
+    aliases: Optional list of aliases for the subcommand (used with cmd parameter).
 
   Returns:
     The decorated class (now a dataclass).
@@ -370,9 +397,13 @@ def configclass(
     factory = get_factory(clz)  # get_factory upserts if not yet available
     if cmd:
       factory.cmd = cmd
+    if help is not None:
+      factory.help = help
+    if aliases is not None:
+      factory.aliases = aliases
     return clz
 
-  if cls and not cmd:
+  if cls and not cmd and help is None and aliases is None:
     return decorator(cls)
   else:
     return lambda clz: decorator(clz)
