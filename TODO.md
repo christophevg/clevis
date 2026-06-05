@@ -8,13 +8,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Blockers for the next minor release.
 
-- [ ] **P2-003: Resolve `project.toml` repository file**
-  - File in repository root appears to be a test/example configuration
-  - Either move to `examples/` directory with a clear purpose, or add to `.gitignore`
-  - Update README if it's meant to be an example
-  - **Satisfies**: R91
-  - **Acceptance**: `project.toml` is gone from the root, or is clearly marked as an example/test fixture
-
 ### Phase 3: Polish (P3 - Medium)
 
 Nice-to-have improvements for developer experience.
@@ -90,6 +83,12 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-003: Resolve `project.toml` repository file** ✅ 2026-06-05
+  - Moved `project.toml` to `examples/project.toml` as part of P2-001 implementation
+  - File now serves as example configuration in the examples directory
+  - **Satisfies**: R91
+  - **Note**: Resolved during P2-001 when creating examples for Factory pattern
 
 - [x] **P2-002: Add security parameter to `get_config()`** ✅ 2026-06-05 (PR #6)
   - Add optional `security` argument to `get_config()` function
