@@ -8,24 +8,27 @@ Run with:
 
 from rich.pretty import pprint
 
-from clevis import configclass, get_cmd, get_config
+from clevis import configclass, get_cmd, get_config, SecurityAction
 
 
 @configclass(cmd="check")
 class CheckConfig:
-  verbose : bool = False
+  verbose: bool = False
+
 
 @configclass(cmd="print")
 class PrintConfig:
-  rich : bool = False
+  rich: bool = False
+
 
 if __name__ == "__main__":
   cmd = get_cmd()
+  security = {"file_permissions": SecurityAction.LOG, "directory_permissions": SecurityAction.LOG}
   if cmd == "check":
-    config = get_config(CheckConfig, project=False, user=False)
+    config = get_config(CheckConfig, project=False, user=False, security=security)
     print(f"checking verbose={config.verbose}")
   elif cmd == "print":
-    config = get_config(PrintConfig, project=False, user=False)
+    config = get_config(PrintConfig, project=False, user=False, security=security)
     if config.rich:
       pprint(config)
     else:
