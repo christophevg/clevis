@@ -17,7 +17,7 @@ from argparse import Action, Namespace
 from collections.abc import Callable
 from dataclasses import Field, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Protocol, get_args
+from typing import Any, Protocol, TypeVar, get_args
 
 from dacite import from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
@@ -47,7 +47,7 @@ class Parser(Protocol):
     """Add an argument to the parser."""
     ...
 
-  def add_subparsers(self):
+  def add_subparsers(self, **kwargs: Any) -> "SubParser":
     ...
 
   def parse_args(self, args: list[str] | None = None) -> Namespace:
@@ -59,18 +59,18 @@ class SubParser(Protocol):
     ...
 
 # the default parser is assigned to Factories that aren't initialized with a parser
-_default_parser: Parser = argparse.ArgumentParser()
+_default_parser: argparse.ArgumentParser = argparse.ArgumentParser()
 
-_sub_parsers = {}
+_sub_parsers: dict[Parser, Any] = {}
 
-def get_sub_parser(parser):
+def get_sub_parser(parser: Parser) -> "SubParser":
   global _sub_parsers
   try:
-    return _sub_parsers[parser]
+    return _sub_parsers[parser]  # type: ignore[no-any-return]
   except KeyError:
     _sub_parsers[parser] = parser.add_subparsers(dest="cmd")
     _sub_parsers[parser].required = True
-    return _sub_parsers[parser]
+    return _sub_parsers[parser]  # type: ignore[no-any-return]
 
 @dataclass
 class Factory:
@@ -88,7 +88,7 @@ class Factory:
 
   config_class : type
   prefix : str | None = None
-  parser : Parser = field(default_factory=lambda: _default_parser)
+  parser : Parser = field(default_factory=lambda: _default_parser)  # type: ignore[assignment]
   cmd : str | None = None
   sub_parser : Parser | None = field(init=False, default=None)
 
@@ -137,7 +137,7 @@ class Factory:
       Dictionary with dotted keys (e.g., {"database.host": "localhost"}).
       If prefix is set, keys are stripped of the prefix.
     """
-    args_dict = vars(_configured(self.parser).parse_args(args))
+    args_dict = vars(_ensure_configured(self.parser).parse_args(args))
     if self.prefix:
       args_dict = {
         key[len(self.prefix) + 1 :]: value
@@ -198,11 +198,12 @@ def get_factory(clz: type) -> Factory:
     _factories[clz] = Factory(clz)
     return _factories[clz]
 
-from typing import Callable, Type, TypeVar
-
 T = TypeVar('T')
 
-def configclass(cls = None, cmd = None) -> type:
+def configclass(
+  cls: type[T] | None = None,
+  cmd: str | None = None
+) -> type | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
 
@@ -228,7 +229,7 @@ def configclass(cls = None, cmd = None) -> type:
   Returns:
     The decorated class (now a dataclass).
   """
-  def decorator(clz: Type[T]) -> Type[T]:
+  def decorator(clz: type[T]) -> type[T]:
     clz = dataclass(clz)
     factory = get_factory(clz)  # get_factory upserts if not yet available
     if cmd:
@@ -247,17 +248,18 @@ def _reset_factories() -> None:
   For testing only - ensures test isolation by resetting global state.
   Creates a fresh default parser.
   """
-  global _factories, _configured_parsers, _default_parser
+  global _factories, _configured_parsers, _default_parser, _sub_parsers
   _factories = {}
   _configured_parsers = []
   _default_parser = argparse.ArgumentParser()
+  _sub_parsers = {}
 
 
 # keeps track if parser is configured
 _configured_parsers: list[Parser] = []
 
 
-def _configured(parser: Parser) -> Parser:
+def _ensure_configured(parser: Parser) -> Parser:
   """
   Ensure a parser is fully configured by all factories that use it.
 
@@ -453,21 +455,31 @@ def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
       # set value
       scope[final_key] = value  # upsert key=value
 
-def get_cmd(parser=None):
+def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
+  """
+  Get the active subcommand name from parsed arguments.
+
+  Args:
+    parser: Optional parser to use (defaults to _default_parser)
+    args: Optional list of CLI arguments (for testing)
+
+  Returns:
+    The subcommand name or None if no subcommand was used
+  """
   if not parser:
     parser = _default_parser
-  args = vars(_configured(parser).parse_args())
-  cmd = args.pop("cmd", None)
+  parsed_args = vars(_ensure_configured(parser).parse_args(args))
+  cmd: str | None = parsed_args.pop("cmd", None)
   return cmd
 
 def get_config(
-  clz: type,
+  clz: type[T],
   name: str = "project",
   user: bool = True,
   project: bool = True,
   cli: bool = True,
   args: list[str] | None = None # used for testing, simulating sys.argv
-) -> Any:
+) -> T:
   """
   Load configuration from TOML files and CLI arguments.
 
@@ -533,7 +545,7 @@ def get_config(
       field_path=field_path,
       config_name=name,
       suggest_cli=cli,
-    ) from None
+    ) from e
   except WrongTypeError as e:
     # Extract field path and type info from dacite error
     error_msg = str(e)
@@ -546,7 +558,7 @@ def get_config(
       field_path=field_path,
       config_name=name,
       suggest_cli=cli,
-    ) from None
+    ) from e
   except DaciteError as e:
     # Catch any other dacite errors
     raise ConfigError(
@@ -554,4 +566,18 @@ def get_config(
       field_path="unknown",
       config_name=name,
       suggest_cli=cli,
-    ) from None
+    ) from e
+
+__all__ = [
+  "Factory",
+  "Parser",
+  "SubParser",
+  "get_factory",
+  "configclass",
+  "get_config",
+  "get_cmd",
+  "ConfigError",
+  "apply_to_dict",
+  "unpack_type",
+  "_reset_factories",
+]

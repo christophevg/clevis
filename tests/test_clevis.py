@@ -1,5 +1,6 @@
 """Tests for clevis configuration module."""
 
+import argparse
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from clevis import (
   get_config,
   apply_to_dict,
   get_factory,
+  get_cmd,
   configclass,
   Factory,
   unpack_type,
@@ -398,3 +400,162 @@ class TestFactoryPattern:
     # Factories are recreated (new instances)
     factory1_new = get_factory(Config1)
     assert factory1_new.config_class is Config1
+
+
+class TestSubcommands:
+  """Tests for subcommand functionality."""
+
+  def test_configclass_with_cmd(self):
+    """@configclass(cmd='check') should register as subcommand."""
+    _reset_factories()
+
+    @configclass(cmd="check")
+    class CheckConfig:
+      verbose: bool = False
+
+    factory = get_factory(CheckConfig)
+    assert factory.cmd == "check"
+
+  def test_get_cmd(self):
+    """get_cmd() should return active subcommand name."""
+    _reset_factories()
+
+    @configclass(cmd="check")
+    class CheckConfig:
+      verbose: bool = False
+
+    @configclass(cmd="run")
+    class RunConfig:
+      name: str = "default"
+
+    # Simulate CLI args with subcommand
+    cmd = get_cmd(args=["check"])
+    assert cmd == "check"
+
+  def test_subparser_creation(self):
+    """Factory with cmd should create subparser."""
+    _reset_factories()
+
+    parser = argparse.ArgumentParser()
+    factory = get_factory(
+      type("Config", (), {"__dataclass_fields__": {}, "__annotations__": {}})
+    )
+    factory.parser = parser
+    factory.cmd = "check"
+
+    # Configure parser
+    factory.configure_parser()
+
+    # Should have sub_parser set
+    assert factory.sub_parser is not None
+
+  def test_multiple_subcommands(self):
+    """Multiple subcommands should work together."""
+    _reset_factories()
+
+    @dataclass
+    class CheckConfig:
+      verbose: bool = False
+
+    @dataclass
+    class RunConfig:
+      name: str = "default"
+
+    parser = argparse.ArgumentParser()
+    factory1 = get_factory(CheckConfig)
+    factory1.parser = parser
+    factory1.cmd = "check"
+    factory1.configure_parser()
+
+    factory2 = get_factory(RunConfig)
+    factory2.parser = parser
+    factory2.cmd = "run"
+    factory2.configure_parser()
+
+    # Both should have sub_parsers
+    assert factory1.sub_parser is not None
+    assert factory2.sub_parser is not None
+
+
+class TestPrefix:
+  """Tests for prefix functionality."""
+
+  def test_prefix_affects_cli_args(self):
+    """Prefix should modify CLI argument names."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      name: str = "default"
+      value: int = 42
+
+    factory = get_factory(Config)
+    factory.prefix = "app1"
+
+    # Get the args that would be parsed
+    args_dict = factory.get_args(args=["--app1-name", "test", "--app1-value", "100"])
+    assert args_dict == {"name": "test", "value": 100}
+
+  def test_prefix_stripping(self):
+    """get_args() should strip prefix from keys."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      name: str = "default"
+
+    factory = get_factory(Config)
+    factory.prefix = "app1"
+
+    # When prefix is set, keys should be stripped
+    args_dict = factory.get_args(args=["--app1-name", "test"])
+    assert args_dict == {"name": "test"}
+
+
+class TestSharedParser:
+  """Tests for shared parser functionality."""
+
+  def test_shared_parser(self):
+    """Multiple factories should share one parser."""
+    _reset_factories()
+
+    @dataclass
+    class DatabaseConfig:
+      host: str = "localhost"
+
+    @dataclass
+    class AppConfig:
+      name: str = "app"
+
+    parser = argparse.ArgumentParser()
+
+    # Both factories use same parser
+    factory1 = get_factory(DatabaseConfig)
+    factory1.parser = parser
+
+    factory2 = get_factory(AppConfig)
+    factory2.parser = parser
+
+    # Both should have same parser
+    assert factory1.parser is parser
+    assert factory2.parser is parser
+
+  def test_lazy_configuration(self):
+    """Parser should be configured lazily on first get_config."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      name: str = "default"
+
+    factory = get_factory(Config)
+
+    # Factory exists but not configured yet
+    assert not factory._configured
+
+    # Call get_config which triggers configuration
+    config = get_config(Config, name="test", user=False, project=False, args=[])
+
+    # Now it should be configured
+    assert factory._configured
+    assert config.name == "default"
