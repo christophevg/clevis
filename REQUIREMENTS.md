@@ -1,5 +1,7 @@
 # Requirements
 
+This document tracks the source-of-truth requirements for Clevis. Each requirement is referenced from TODO.md tasks via its ID (R1, R2, ...).
+
 ## Functional Requirements
 
 ### Core Features (from README.md)
@@ -29,67 +31,121 @@
 - [x] R17: Boolean fields with store_true action
 - [x] R18: Optional field handling (None defaults)
 - [x] R19: Type preservation through argparse
-- [ ] R54: Expose argument definitions for custom parser integration (`get_argument_definitions()`)
-- [ ] R55: Accept dict input in `get_config()` for parsed arguments
-- [ ] R56: Single source of truth for argument generation (internal refactoring)
-- [ ] R57: Backward compatibility maintained for existing API
+
+### Factory Pattern (P2-001, issue #3)
+
+The Factory pattern enables three use cases:
+
+1. **Simple case**: Direct `get_config()` call with auto-discovered parser
+2. **Module development**: Pre-register configs with `@configclass` decorator
+3. **Multi-module orchestration**: Shared parser with prefixes, custom parser injection
+4. **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
+
+- [ ] R20: `@configclass` decorator registers dataclass with Clevis factory system
+- [ ] R21: `get_factory(Config)` returns Factory instance for configuration customization
+- [ ] R22: `Factory.prefix` applies CLI argument prefix (e.g., "app1" -> "--app1-name")
+- [ ] R23: `Factory.parser` allows custom or shared parser injection
+- [ ] R24: Lazy parser configuration - parser configured on first `get_config()` call
+- [ ] R25: `Factory.list_fields()` exposes field structure for introspection
+- [ ] R26: `Factory.get_args()` returns parsed CLI arguments as dict with dotted keys
+- [ ] R27: Parser Protocol for pluggable argument parsers (argparse-compatible)
+- [ ] R28: Multiple configs can share one parser for orchestrated CLI
+- [ ] R29: `@configclass(cmd="name")` registers config as subcommand
+- [ ] R30: `get_cmd()` returns the active subcommand name
+- [ ] R31: SubParser Protocol for subparser operations
+- [ ] R32: `get_sub_parser(parser)` creates or returns existing subparser
+- [ ] R33: Subcommand-specific arguments parsed correctly for each config
 
 ### Error Handling
 
-- [x] R20: MissingValueError conversion to helpful ConfigError
-- [x] R21: WrongTypeError conversion to helpful ConfigError
-- [x] R22: Generic DaciteError handling
-- [x] R23: Field path extraction from error messages
-- [x] R24: Multi-source resolution suggestions in errors
+- [x] R34: MissingValueError conversion to helpful ConfigError
+- [x] R35: WrongTypeError conversion to helpful ConfigError
+- [x] R36: Generic DaciteError handling
+- [x] R37: Field path extraction from error messages
+- [x] R38: Multi-source resolution suggestions in errors
+
+### Security (P2-002, issue #4)
+
+- [ ] R39: Optional `security` argument to `get_config()`
+- [ ] R40: Default security policy is maximally strict (reject on security issues)
+- [ ] R41: Per-check options: Don't Check | Log | Reject
+- [ ] R42: Configuration file permission validation (group/other readable)
+- [ ] R43: Parent directory security validation (world-writable)
 
 ## Non-Functional Requirements
 
 ### Code Quality
 
-- [ ] R25: 90%+ test coverage (currently 78%)
-- [x] R26: Full type hints on all public functions
-- [x] R27: Docstrings on all public functions
-- [x] R28: Code style compliance (ruff/mypy)
-- [ ] R29: All parser fallback branches tested
+- [ ] R44: 90%+ test coverage (currently ~80%)
+- [x] R45: Full type hints on all public functions
+- [x] R46: Docstrings on all public functions
+- [x] R47: Code style compliance (ruff/mypy)
+- [ ] R48: Type-preservation tests for argparse with complex union types (>2 types)
+- [ ] R49: `__init__.pyi` type stub file for IDE support
+- [ ] R50: Remove duplicate imports (typing.Callable imported twice)
+- [ ] R51: `_reset_factories()` must reset `_sub_parsers` global
 
 ### Documentation
 
-- [x] R30: README.md with full usage documentation
-- [x] R31: docs/conf.py for Sphinx/ReadTheDocs
-- [x] R32: docs/index.rst with toctree
-- [ ] R33: docs/installation.rst (missing)
-- [ ] R34: docs/usage.rst (missing)
-- [ ] R35: docs/api.rst (missing)
+- [x] R52: README.md with full usage documentation
+- [x] R53: docs/conf.py for Sphinx/ReadTheDocs
+- [x] R54: docs/index.rst with toctree
+- [x] R55: docs/installation.rst
+- [ ] R56: docs/usage.rst with Factory pattern and subcommand documentation
+- [x] R57: docs/api.rst
+- [ ] R58: Cookbook entries for nested configs, env vars, and custom validation patterns
+- [ ] R59: Add `help` parameter to `@configclass(cmd=...)` for subcommand help text
+- [ ] R60: Add `aliases` parameter to `@configclass(cmd=...)` for subcommand aliases
 
 ### Project Infrastructure
 
-- [x] R36: pyproject.toml with proper metadata
-- [x] R37: Makefile with standard targets
-- [x] R38: .github/workflows/test.yml for CI
-- [x] R39: .readthedocs.yaml for documentation
-- [x] R40: LICENSE file (MIT)
-- [x] R41: .gitignore for Python projects
-- [ ] R42: Initial git commit (not done yet)
+- [x] R61: pyproject.toml with proper metadata
+- [x] R62: Makefile with standard targets
+- [x] R63: .github/workflows/test.yml for CI
+- [x] R64: .readthedocs.yaml for documentation
+- [x] R65: LICENSE file (MIT)
+- [x] R66: .gitignore for Python projects
+- [x] R67: Initial git commit
 
 ### Release Readiness
 
-- [x] R43: Version in pyproject.toml and __init__.py
-- [x] R44: Makefile has pre-publish checks
-- [x] R45: Makefile has publish target
-- [x] R46: PyPI badges in README.md
-- [ ] R47: PyPI publication (not done yet)
+- [x] R68: Version in pyproject.toml and __init__.py
+- [x] R69: Makefile has pre-publish checks
+- [x] R70: Makefile has publish target
+- [x] R71: PyPI badges in README.md
+- [x] R72: PyPI publication (0.2.0)
 
 ### Testing
 
-- [x] R48: Unit tests for core functionality
-- [x] R49: Unit tests for parser selection
-- [ ] R50: Tests for user-level config loading
-- [ ] R51: Tests for boolean CLI arguments
-- [ ] R52: Tests for error handling branches
-- [ ] R53: Tests for parser fallback paths
-- [ ] R58: Tests for `get_argument_definitions()` function
-- [ ] R59: Tests for dict input in `get_config()`
+- [x] R73: Unit tests for core functionality
+- [x] R74: Unit tests for parser selection
+- [ ] R75: Tests for parser fallback branches (tomlev, tomli, tomllib)
+- [ ] R76: Tests for error handling branches (WrongTypeError, DaciteError)
+- [ ] R77: Tests for user-level config loading (~/.{name}.toml)
+- [ ] R78: Tests for boolean CLI arguments (store_true)
+- [ ] R79: Tests for `@configclass` decorator
+- [ ] R80: Tests for `get_factory()` function
+- [ ] R81: Tests for `Factory.prefix` application
+- [ ] R82: Tests for shared parser (multiple configs, one parser)
+- [ ] R83: Tests for lazy parser configuration
+- [ ] R84: Tests for `Factory.get_args()` with prefix stripping
+- [ ] R85: Tests for `_reset_factories()` test isolation
+- [ ] R86: Tests for `@configclass(cmd="name")` subcommand registration
+- [ ] R87: Tests for `get_cmd()` returns correct command
+- [ ] R88: Tests for subcommand arguments parsed correctly
+- [ ] R89: Tests for multiple subcommands working together
+- [ ] R90: Tests for `_reset_factories()` clearing `_sub_parsers`
+
+### Repository Hygiene
+
+- [ ] R91: `project.toml` file resolved (moved/renamed/gitignored) — purpose clear
+- [ ] R92: `examples/commands.py` example working and documented
 
 ## Completed
 
-(None yet - project not released)
+The following requirements were satisfied by prior tasks. They are kept here for traceability.
+
+- [x] R1-R19 (core features, parser support, CLI integration) — Iteration 1, delivered in v0.1.0
+- [x] R34-R38 (error handling) — Iteration 1, delivered in v0.1.0
+- [x] R45-R47, R52-H55, R57, R61-H67, R68-H72, R73-R74 — Iteration 1-2 (P1-001, P1-002, P1-003)
+- [x] Initial PyPI publication at v0.2.0 — P1-003 closed

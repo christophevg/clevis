@@ -301,6 +301,326 @@ CLI arguments have the highest priority and override all other configuration:
    # All three layers: TOML defaults, TOML files, CLI args
    # Result: debug=True, database.host="localhost"
 
+Factory Pattern for Multi-Module Apps
+-------------------------------------
+
+Clevis provides a Factory pattern for advanced use cases where multiple modules
+need their own configuration, or when you need to customize how CLI arguments
+are generated.
+
+Three Use Cases
+~~~~~~~~~~~~~~~
+
+The Factory pattern supports three distinct patterns:
+
+1. **Simple case**: Direct ``get_config()`` call - no factory setup needed
+2. **Module development**: Pre-register configs with ``@configclass``
+3. **Multi-module orchestration**: Shared parser with prefixes
+
+Simple Configuration
+~~~~~~~~~~~~~~~~~~~~
+
+For most applications, just use ``get_config()`` directly:
+
+.. code-block:: python
+
+   from clevis import get_config
+   from dataclasses import dataclass
+
+   @dataclass
+   class Config:
+       name: str = "MyApp"
+       debug: bool = False
+
+   config = get_config(Config, name="myapp")
+
+Clevis automatically creates a factory with the default parser. No setup required.
+
+Module Development
+~~~~~~~~~~~~~~~~~~
+
+When developing a library or module that uses Clevis for its configuration,
+use the ``@configclass`` decorator to pre-register your configuration:
+
+.. code-block:: python
+
+   from clevis import configclass, get_config
+
+   @configclass
+   class ModuleConfig:
+       api_key: str | None = None
+       timeout: int = 30
+       retries: int = 3
+
+   class MyModule:
+       def __init__(self):
+           self.config = get_config(ModuleConfig, name="mymodule")
+
+The ``@configclass`` decorator:
+
+1. Applies ``@dataclass`` to your class
+2. Registers it with Clevis's factory system
+
+This allows orchestration code (the application using your module) to customize
+the configuration before your module is instantiated.
+
+Multi-Module Orchestration
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For CLI applications that combine multiple modules, each with their own
+configuration, use factories to orchestrate argument parsing:
+
+.. code-block:: python
+
+   import argparse
+   from clevis import configclass, get_config, get_factory
+
+   # Your application's config
+   @configclass
+   class AppConfig:
+       verbose: bool = False
+
+   # Module 1's config (could be from an external package)
+   @configclass
+   class App1Config:
+       name: str | None = None
+
+   # Module 2's config (could be from another external package)
+   @configclass
+   class App2Config:
+       name: str | None = None
+
+   # Configure factories before instantiation
+   get_factory(App1Config).prefix = "app1"  # CLI args: --app1-name
+   get_factory(App2Config).prefix = "app2"  # CLI args: --app2-name
+
+   # Share a single parser across all configs
+   parser = argparse.ArgumentParser(description="Multi-Module App")
+   get_factory(AppConfig).parser = parser
+   get_factory(App1Config).parser = parser
+   get_factory(App2Config).parser = parser
+
+   # Now instantiate modules - each gets its own prefixed config
+   app1 = App1()  # Uses --app1-name from CLI
+   app2 = App2()  # Uses --app2-name from CLI
+
+   if get_config(AppConfig).verbose:
+       print(app1, app2)
+
+Running this application:
+
+.. code-block:: bash
+
+   % python app.py --help
+   usage: app.py [-h] [--app1-name APP1.NAME] [--app2-name APP2.NAME]
+                 [--verbose]
+
+   options:
+     -h, --help            show this help message and exit
+     --app1-name APP1.NAME
+                           provide app1.name
+     --app2-name APP2.NAME
+                           provide app2.name
+     --verbose             provide verbose
+
+   % python app.py --app1-name "first" --app2-name "second" --verbose
+   App1Config(name='first')
+   App2Config(name='second')
+
+Factory API
+~~~~~~~~~~~
+
+``get_factory(config_class)``
+   Returns the Factory instance for a configuration class.
+   Creates a new Factory if one doesn't exist (singleton per class).
+
+``@configclass``
+   Decorator that applies ``@dataclass`` and registers the class with
+   the factory system. Equivalent to::
+
+      @dataclass
+      class Config: ...
+      _ = get_factory(Config)
+
+Factory Attributes
+~~~~~~~~~~~~~~~~~~
+
+``Factory.config_class``
+   The dataclass type this factory configures.
+
+``Factory.prefix``
+   Optional prefix for CLI arguments. When set, arguments become
+   ``--{prefix}-{field}`` and the prefix is stripped from parsed values.
+
+``Factory.parser``
+   The argparse-compatible parser to use. Defaults to a shared parser.
+   Set this to use a custom parser or share across multiple configs.
+
+Factory Methods
+~~~~~~~~~~~~~~~
+
+``Factory.list_fields()``
+   Returns a list of ``(Field, path)`` tuples for all fields in the config,
+   including nested fields. Useful for introspection.
+
+``Factory.get_args(args=None)``
+   Parse CLI arguments and return as a dictionary with dotted keys.
+   If ``prefix`` is set, keys are stripped of the prefix.
+
+``Factory.configure_parser()``
+   Configures the parser with arguments for this config class.
+   Called automatically on first ``get_config()`` - usually not called directly.
+
+Custom Parsers
+~~~~~~~~~~~~~~
+
+You can use any argparse-compatible parser by implementing the ``Parser`` protocol:
+
+.. code-block:: python
+
+   from clevis import Parser
+
+   class MyCustomParser:
+       def add_argument(self, *args, **kwargs):
+           # Your implementation
+           pass
+
+       def parse_args(self, args=None):
+           # Your implementation
+           pass
+
+   get_factory(Config).parser = MyCustomParser()
+
+This enables integration with alternative argument parsing libraries.
+
+Testing with Factories
+~~~~~~~~~~~~~~~~~~~~~~
+
+For test isolation, use ``_reset_factories()`` to clear all registered factories:
+
+.. code-block:: python
+
+   from clevis import _reset_factories
+
+   def setup_method():
+       _reset_factories()
+
+   def test_my_config():
+       @configclass
+       class TestConfig:
+           value: str = "default"
+
+       config = get_config(TestConfig, user=False, project=False, args=[])
+       assert config.value == "default"
+
+.. important::
+
+   Always reset factories in test setup to avoid state leakage between tests.
+
+Subcommands (CLI Applications)
+-------------------------------
+
+For CLI applications with multiple commands (like ``git``, ``docker``, etc.),
+use the ``cmd`` parameter with ``@configclass``:
+
+.. code-block:: python
+
+   from clevis import configclass, get_cmd, get_config
+
+   @configclass(cmd="check")
+   class CheckConfig:
+       verbose: bool = False
+       fix: bool = False
+
+   @configclass(cmd="print")
+   class PrintConfig:
+       output: str = "text"
+       rich: bool = False
+
+   if __name__ == "__main__":
+       cmd = get_cmd()
+       if cmd == "check":
+           config = get_config(CheckConfig, project=False, user=False)
+           print(f"Checking with verbose={config.verbose}")
+       elif cmd == "print":
+           config = get_config(PrintConfig, project=False, user=False)
+           print(f"Output format: {config.output}")
+
+Running this application:
+
+.. code-block:: bash
+
+   % python app.py --help
+   usage: app.py [-h] {check,print} ...
+
+   positional arguments:
+     {check,print}
+
+   options:
+     -h, --help     show this help message and exit
+
+   % python app.py check --help
+   usage: app.py check [-h] [--verbose] [--fix]
+
+   options:
+     -h, --help   show this help message and exit
+     --verbose    provide verbose
+     --fix        provide fix
+
+   % python app.py check --verbose
+   Checking with verbose=True
+
+How Subcommands Work
+~~~~~~~~~~~~~~~~~~~
+
+When you use ``@configclass(cmd="name")``:
+
+1. Clevis creates a subparser for that command
+2. ``get_cmd()`` returns the command name from parsed arguments
+3. ``get_config()`` uses the subparser's arguments for that config
+
+You can mix subcommand configs with regular configs:
+
+.. code-block:: python
+
+   @configclass
+   class GlobalConfig:
+       debug: bool = False
+
+   @configclass(cmd="build")
+   class BuildConfig:
+       output: str = "dist"
+
+   @configclass(cmd="test")
+   class TestConfig:
+       coverage: bool = False
+
+   # Global config applies to all commands
+   global_config = get_config(GlobalConfig)
+   cmd = get_cmd()
+
+   if cmd == "build":
+       build_config = get_config(BuildConfig, project=False, user=False)
+       ...
+   elif cmd == "test":
+       test_config = get_config(TestConfig, project=False, user=False)
+       ...
+
+Subcommand API
+~~~~~~~~~~~~~~
+
+``@configclass(cmd="name")``
+   Decorator that registers the config as a subcommand. Creates a subparser
+   with that command name.
+
+``get_cmd(parser=None)``
+   Returns the active subcommand name from parsed arguments.
+   If no parser specified, uses the default parser.
+
+``get_sub_parser(parser)``
+   Creates or returns the existing subparser for a parser.
+   Called automatically by Factory when ``cmd`` is set.
+
 Layered Configuration (Precedence)
 ----------------------------------
 

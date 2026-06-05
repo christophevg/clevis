@@ -13,21 +13,269 @@ TOML Parser Selection (priority order):
 
 import argparse
 import functools
+from argparse import Action, Namespace
 from collections.abc import Callable
-from dataclasses import Field, fields, is_dataclass
+from dataclasses import Field, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, Protocol, get_args
 
 from dacite import from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
 
 __version__ = "0.2.0"
 
+# Factory support
+
+class Parser(Protocol):
+  """
+  Protocol for argparse-compatible parsers.
+
+  Any class implementing these two methods can be used as a parser
+  for Clevis configuration.
+  """
+
+  def add_argument(
+    self,
+    *name_or_flags: str,
+    action: str | type[Action] = ...,
+    default: Any = ...,
+    type: Any = ...,
+    help: str | None = ...,
+    dest: str | None = ...,
+    **kwargs: Any
+  ) -> Action:
+    """Add an argument to the parser."""
+    ...
+
+  def add_subparsers(self):
+    ...
+
+  def parse_args(self, args: list[str] | None = None) -> Namespace:
+    """Parse arguments and return a Namespace."""
+    ...
+
+class SubParser(Protocol):
+  def add_parser(self, name: str) -> Parser:
+    ...
+
+# the default parser is assigned to Factories that aren't initialized with a parser
+_default_parser: Parser = argparse.ArgumentParser()
+
+_sub_parsers = {}
+
+def get_sub_parser(parser):
+  global _sub_parsers
+  try:
+    return _sub_parsers[parser]
+  except KeyError:
+    _sub_parsers[parser] = parser.add_subparsers(dest="cmd")
+    _sub_parsers[parser].required = True
+    return _sub_parsers[parser]
+
+@dataclass
+class Factory:
+  """
+  Configuration factory for a dataclass.
+
+  Collects parser configuration for deferred setup, allowing orchestration
+  code to customize prefixes and parsers before configuration loading.
+
+  Attributes:
+    config_class: The dataclass type this factory configures.
+    prefix: Optional CLI argument prefix (e.g., "app1" -> "--app1-name").
+    parser: The argparse-compatible parser to use.
+  """
+
+  config_class : type
+  prefix : str | None = None
+  parser : Parser = field(default_factory=lambda: _default_parser)
+  cmd : str | None = None
+  sub_parser : Parser | None = field(init=False, default=None)
+
+  _configured : bool = False
+
+  def configure_parser(self) -> None:
+    """
+    Configure the parser with arguments for this config class.
+
+    Called automatically on first get_config() - usually not called directly.
+    """
+    if self._configured:
+      return
+    if self.cmd:
+      self.sub_parser = get_sub_parser(self.parser).add_parser(self.cmd)
+    self._configured = True
+    for f, path in self.list_fields():
+      name = ".".join(path + [f.name])  # concat intermediate classes with "."
+      cli_name = name.replace(".", "-").replace("_", "-")
+      if self.prefix:
+        cli_name = f"{self.prefix}-{cli_name}"
+        name = f"{self.prefix}.{name}"
+      parser = self.sub_parser if self.sub_parser else self.parser
+      arg = functools.partial(
+        parser.add_argument,
+        f"--{cli_name}",
+        dest=name,  # name with dots
+        default=None,  # Use None so TOML values aren't overridden
+        help=f"provide {name}",
+      )
+      # complete partial: boolean switch of store value
+      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+      if concrete_type is bool:
+        _ = arg(action="store_true")
+      else:
+        _ = arg(type=concrete_type)
+
+  def get_args(self, args: list[str] | None = None) -> dict[str, Any]:
+    """
+    Parse CLI arguments and return as dictionary.
+
+    Args:
+      args: CLI arguments (defaults to sys.argv[1:])
+
+    Returns:
+      Dictionary with dotted keys (e.g., {"database.host": "localhost"}).
+      If prefix is set, keys are stripped of the prefix.
+    """
+    args_dict = vars(_configured(self.parser).parse_args(args))
+    if self.prefix:
+      args_dict = {
+        key[len(self.prefix) + 1 :]: value
+        for key, value in args_dict.items()
+        if key.startswith(self.prefix)
+      }
+    return args_dict
+
+  def list_fields(
+    self,
+    clz: type | None = None,
+    path: list[str] | None = None
+  ) -> list[tuple[Field[Any], list[str]]]:
+    """
+    Recursively list all fields in nested dataclasses.
+
+    Args:
+      clz: The dataclass to inspect (defaults to self.config_class)
+      path: Current path in the hierarchy (used for recursion)
+
+    Returns:
+      List of (field, path) tuples for each leaf field.
+    """
+    clz = self.config_class if clz is None else clz
+    path = [] if path is None else path
+    result = []
+    for f in fields(clz):
+      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+      if is_dataclass(concrete_type):
+        result.extend(self.list_fields(concrete_type, path=path + [f.name]))
+      else:
+        result.append((f, path))
+    return result
+
+
+# factories for configurations
+_factories: dict[type, Factory] = {}
+
+
+def get_factory(clz: type) -> Factory:
+  """
+  Get the Factory for a configuration class.
+
+  Returns the same Factory instance for a given class (singleton pattern).
+  Creates a new Factory if one doesn't exist.
+
+  Args:
+    clz: The dataclass type to get a factory for.
+
+  Returns:
+    Factory instance for the given class.
+  """
+  global _factories
+  try:
+    return _factories[clz]
+  except KeyError:
+    # create default factory
+    _factories[clz] = Factory(clz)
+    return _factories[clz]
+
+from typing import Callable, Type, TypeVar
+
+T = TypeVar('T')
+
+def configclass(cls = None, cmd = None) -> type:
+  """
+  Decorator that registers a dataclass with Clevis's factory system.
+
+  Applies @dataclass to the class and registers it with get_factory().
+
+  Usage::
+
+    @configclass
+    class MyConfig:
+      name: str = "default"
+
+  This is equivalent to::
+
+    @dataclass
+    class MyConfig:
+      name: str = "default"
+
+    get_factory(MyConfig)  # register
+
+  Args:
+    clz: The class to decorate.
+
+  Returns:
+    The decorated class (now a dataclass).
+  """
+  def decorator(clz: Type[T]) -> Type[T]:
+    clz = dataclass(clz)
+    factory = get_factory(clz)  # get_factory upserts if not yet available
+    if cmd:
+      factory.cmd = cmd
+    return clz
+
+  if cls and not cmd:
+    return decorator(cls)
+  else:
+    return lambda clz: decorator(clz)
+
+def _reset_factories() -> None:
+  """
+  Clear all registered factories and configured parsers.
+
+  For testing only - ensures test isolation by resetting global state.
+  Creates a fresh default parser.
+  """
+  global _factories, _configured_parsers, _default_parser
+  _factories = {}
+  _configured_parsers = []
+  _default_parser = argparse.ArgumentParser()
+
+
+# keeps track if parser is configured
+_configured_parsers: list[Parser] = []
+
+
+def _configured(parser: Parser) -> Parser:
+  """
+  Ensure a parser is fully configured by all factories that use it.
+
+  Lazy configuration - called on first get_config() for a given parser.
+  """
+  global _configured_parsers
+  if parser not in _configured_parsers:
+    # lazy configure using each factory having this parser
+    for factory in _factories.values():
+      if factory.parser is parser:
+        factory.configure_parser()
+    _configured_parsers.append(parser)
+  return parser
+
 
 # TOML Parser Selection
 # ---------------------
 # Tries parsers in this order: envtoml > tomlev > tomli > tomllib
-
 
 def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   """
@@ -180,66 +428,6 @@ def unpack_type(type_def: type) -> type:
     raise ValueError("Complex unions not supported")
   return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
 
-
-def list_fields(clz: type, path: list[str] | None = None) -> list[tuple[Field[Any], list[str]]]:
-  """
-  Recursively flatten and list all properties in nested dataclasses.
-
-  Args:
-      clz: The dataclass to inspect
-      path: Current path in the hierarchy
-
-  Yields:
-      Tuples of (field, path) for each leaf field
-  """
-  path = [] if not path else path
-  result = []
-  for f in fields(clz):
-    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
-    if is_dataclass(concrete_type):
-      result.extend(list_fields(concrete_type, path=path + [f.name]))
-    else:
-      result.append((f, path))
-  return result
-
-
-def get_args_config(clz: type, args: list[str] | None = None) -> dict[str, Any]:
-  """
-  Construct an argparse parser from a dataclass hierarchy.
-
-  Creates CLI arguments for each leaf field in the dataclass,
-  using dashed notation for nested fields (e.g., --database-host).
-
-  Args:
-      clz: The dataclass type to generate parser for
-      args: Optional list of CLI arguments (defaults to sys.argv[1:])
-
-  Returns:
-      Dictionary of parsed arguments with dotted keys
-      Unprovided arguments have None values
-  """
-  parser = argparse.ArgumentParser()
-  for f, path in list_fields(clz):
-    name = ".".join(path + [f.name])  # concatenate intermediate classes with "."
-    # Convert both dots and underscores to dashes for CLI args
-    cli_name = name.replace(".", "-").replace("_", "-")
-    arg = functools.partial(
-      parser.add_argument,
-      f"--{cli_name}",
-      dest=name,  # name with dots
-      default=None,  # Use None so TOML values aren't overridden
-      help=f"provide {name}",
-    )
-    # complete partial: boolean switch of store value
-    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
-    if concrete_type is bool:
-      _ = arg(action="store_true")
-    else:
-      _ = arg(type=concrete_type)
-
-  return vars(parser.parse_args(args))
-
-
 def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
   """
   Apply dotted command line arguments to a nested dictionary.
@@ -265,14 +453,20 @@ def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
       # set value
       scope[final_key] = value  # upsert key=value
 
+def get_cmd(parser=None):
+  if not parser:
+    parser = _default_parser
+  args = vars(_configured(parser).parse_args())
+  cmd = args.pop("cmd", None)
+  return cmd
 
 def get_config(
-  data_class: type,
+  clz: type,
   name: str = "project",
   user: bool = True,
   project: bool = True,
   cli: bool = True,
-  args: list[str] | None = None,
+  args: list[str] | None = None # used for testing, simulating sys.argv
 ) -> Any:
   """
   Load configuration from TOML files and CLI arguments.
@@ -291,7 +485,7 @@ def get_config(
       - tomllib: Python 3.11+ stdlib (no extras needed)
 
   Args:
-      data_class: The dataclass type to populate
+      clz: The dataclass type to populate
       name: Configuration file name (without .toml extension)
       user: Whether to load user-level config(~/.{name}.toml)
       project: Whether to load project-level config (./{name}.toml)
@@ -319,15 +513,13 @@ def get_config(
     if project_path.exists():
       cfg.update(_load_toml(project_path.open("rb")))
 
-  # Parse CLI args if requested
+  # Parse CLI args if requested and merge them into the config
   if cli or args is not None:
-    cli_args = get_args_config(data_class, args)
-    # Merge CLI args into config
-    apply_to_dict(cli_args, cfg)
+    apply_to_dict(get_factory(clz).get_args(args), cfg)
 
   # Convert dict to dataclass
   try:
-    return from_dict(data_class=data_class, data=cfg)
+    return from_dict(data_class=clz, data=cfg)
   except MissingValueError as e:
     # Extract field path from dacite error message
     # Format: 'missing value for field "database.host"'

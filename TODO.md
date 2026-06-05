@@ -1,171 +1,176 @@
 # TODO
 
+This is the prioritized backlog. Phases group tasks by priority. Each task is atomic with verifiable acceptance criteria and traces back to one or more requirements in `REQUIREMENTS.md`.
+
 ## Backlog
 
-### Phase 2: Quality Assurance (P2 - High)
+### Phase 2: Quality & Features (P2 - High)
 
-These tasks improve quality and should be done before PyPI publication.
+Blockers for the next minor release.
 
-- [ ] **P2-001: Add Parser Fallback Branch Tests**
-  - Test tomlev parser code path (lines 54-63)
-  - Test tomli parser code path (line 71)
-  - Test tomllib stdlib fallback (line 79)
-  - Use mocking to simulate missing parsers
-  - **Satisfies**: R3 (Test coverage requirement)
-  - **Acceptance**: Coverage report shows all parser branches covered
+- [ ] **P2-001: Implement Factory Pattern for Multi-Module Configuration** (GitHub #3)
+  - The Factory pattern enables four use cases:
+    1. **Simple case**: Direct `get_config()` call with auto-discovered parser
+    2. **Module development**: Pre-register configs with `@configclass` decorator
+    3. **Multi-module orchestration**: Shared parser with prefixes, custom parser injection
+    4. **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
 
-- [ ] **P2-002: Add Error Handling Branch Tests**
-  - Test WrongTypeError handling (lines 339-346)
-  - Test generic DaciteError handling (lines 347-353)
-  - Create test cases that trigger each error type
-  - **Satisfies**: R3 (Test coverage requirement)
-  - **Acceptance**: Coverage report shows error branches covered
+  - **Implementation Requirements**:
+    - Add `@configclass` decorator that applies `@dataclass` and registers with factory
+    - Add `get_factory(Config)` to access Factory for customization
+    - Add `Factory` dataclass with `config_class`, `prefix`, `parser`, `cmd` attributes
+    - Add `Factory.configure_parser()` to lazily add arguments to parser
+    - Add `Factory.get_args()` to parse and return dict with dotted keys
+    - Add `Factory.list_fields()` to expose field structure
+    - Add `Parser` Protocol for pluggable parsers (argparse-compatible)
+    - Add `SubParser` Protocol for subparser operations
+    - Add `get_cmd()` to return active subcommand name
+    - Add `get_sub_parser(parser)` to create or return existing subparser
+    - Lazy parser configuration on first `get_config()` call
+    - Support multiple configs sharing one parser
+    - Support subcommands via `@configclass(cmd="name")`
+    - Prefix stripping in `Factory.get_args()` when prefix is set
+    - Add `_reset_factories()` for test isolation (must also reset `_sub_parsers`)
 
-- [ ] **P2-003: Add User-Level Config Loading Tests**
-  - Test loading from `~/.{name}.toml` (lines 307-309)
-  - Test precedence: user < project < CLI
-  - Test user config disabled with `user=False`
-  - **Satisfies**: R3 (Test coverage requirement)
-  - **Acceptance**: Coverage report shows user config loading covered
+  - **Code Quality Fixes Required**:
+    - Fix duplicate import: `typing.Callable` imported at line 20 and line 202 (R50)
+    - Ensure `_reset_factories()` resets `_sub_parsers` global (R51)
+    - Add return type `-> SubParser` to `Parser.add_subparsers()` in Protocol
 
-- [ ] **P2-004: Add Boolean CLI Argument Tests**
-  - Test `store_true` action for boolean fields (line 233)
-  - Test boolean flags in CLI argument generation
-  - Test that `--debug` sets value to True, absence uses default
-  - **Satisfies**: R3 (Test coverage requirement)
-  - **Acceptance**: Coverage report shows store_true branch covered
+  - **Breaking Changes** (acceptable in 0.x):
+    - `list_fields()` is now `Factory.list_fields()` method (not module-level function)
 
-- [ ] **P2-005: Clean Up project.toml File**
-  - File appears to be a test/example configuration
-  - Either move to `examples/` directory or add to `.gitignore`
-  - Update README if it's meant to be an example
-  - **Satisfies**: R4 (Repository cleanliness)
-  - **Acceptance**: No unused files in root, purpose is clear
-
-- [ ] **P2-006: Achieve 90%+ Test Coverage**
-  - Target: 90%+ coverage (currently 78%)
-  - Combine results from P2-001 through P2-004
-  - Address any remaining coverage gaps
-  - **Satisfies**: R3 (Test coverage requirement)
-  - **Acceptance**: `make test-cov` shows 90%+ coverage
-
-- [ ] **P2-007: Expose CLI Argument Definitions for Custom Parsers**
-  - Add `get_argument_definitions()` function yielding argument tuples compatible with `parser.add_argument()`
-  - Modify `get_config()` to accept `args: dict[str, Any]` using full destination names (e.g., `{"database.host": "localhost"}`)
-  - Refactor internal argument generation to use `get_argument_definitions()`, avoiding code duplication
-  - Maintain backward compatibility with existing API
-  - Primary use case: integrate Clevis configuration into custom CLI applications with their own parsers
   - **GitHub Issue**: #3
-  - **Satisfies**: R54, R55, R56, R57
+  - **Satisfies**: R20-R33, R50-R51, R79-R90
   - **Acceptance**:
-    - `get_argument_definitions(Config)` yields tuples compatible with `parser.add_argument()`
-    - `get_config(Config, cli=False, args={"database.host": "localhost"})` works with dict input
-    - Internal `get_args_config()` uses `get_argument_definitions()` (single source of truth)
-    - Existing API remains unchanged and functional
-    - Documentation includes integration pattern examples
+    - `@configclass` decorator works and registers factory
+    - `@configclass(cmd="check")` registers as subcommand
+    - `get_factory(MyConfig)` returns same Factory instance for same class
+    - `factory.prefix = "app1"` causes CLI args to be `--app1-name`
+    - `factory.cmd = "check"` creates subparser for "check" command
+    - `get_cmd()` returns active subcommand name
+    - Multiple factories can share one parser for orchestrated CLI
+    - Multiple subcommands work together in single CLI app
+    - `factory.get_args()` returns dict with dotted keys (prefix stripped if set)
+    - `examples/factory.py` demonstrates simple, module, orchestration use cases
+    - `examples/commands.py` demonstrates subcommand use case
+    - Tests cover: decorator, singleton, prefix, shared parser, lazy config, get_args, subcommands
+    - Documentation updated with Factory pattern and subcommand sections
+    - No debug print statements in production code
+    - `_reset_factories()` clears all globals including `_sub_parsers`
+    - No duplicate imports
 
-### Phase 3: Enhancements (P3 - Medium)
-
-These are nice-to-have improvements for better developer experience.
-
-- [ ] **P3-001: Add Security Parameter to get_config()** (Priority: Unassigned - pending review)
+- [ ] **P2-002: Add security parameter to `get_config()`** (GitHub #4)
   - Add optional `security` argument to `get_config()` function
   - Default security policy: maximally strict (reject on security issues)
   - Per-check options: Don't Check | Log | Reject
-  - Security checks should validate configuration file permissions and parent folder security
+  - Implement configuration file permission validation (group/other readable)
+  - Implement parent directory security validation (world-writable)
   - Out of scope: validation support (dataclasses handle this)
   - **GitHub Issue**: #4
-  - **Satisfies**: Security hardening requirement
+  - **Satisfies**: R39-R43
   - **Acceptance**:
     - `get_config(..., security={...})` parameter works
     - Default behavior rejects insecure configurations
     - Individual checks can be configured (Don't Check, Log, Reject)
-    - Configuration file permission validation implemented
-    - Directory security validation implemented
+    - Configuration file permission validation implemented and tested
+    - Directory security validation implemented and tested
 
-- [ ] **P3-002: Add Type Stub Files**
+- [ ] **P2-003: Resolve `project.toml` repository file**
+  - File in repository root appears to be a test/example configuration
+  - Either move to `examples/` directory with a clear purpose, or add to `.gitignore`
+  - Update README if it's meant to be an example
+  - **Satisfies**: R91
+  - **Acceptance**: `project.toml` is gone from the root, or is clearly marked as an example/test fixture
+
+### Phase 3: Polish (P3 - Medium)
+
+Nice-to-have improvements for developer experience.
+
+- [ ] **P3-001: Add type stub files**
   - Create `src/clevis/__init__.pyi` with type stubs
-  - Improves IDE autocomplete and type checking
-  - Include all public functions and ConfigError class
-  - **Satisfies**: R5 (Developer experience)
-  - **Acceptance**: mypy validates stubs, IDE provides better autocomplete
+  - Include all public functions, Factory, Parser Protocol, SubParser Protocol, ConfigError class
+  - Verify mypy strict mode passes against the stubs
+  - **Satisfies**: R49
+  - **Acceptance**:
+    - `src/clevis/__init__.pyi` exists with type information
+    - mypy validates stubs cleanly
+    - IDEs show improved autocomplete for clevis users
 
-- [ ] **P3-003: Add More Usage Examples**
-  - Add examples for common patterns (nested configs, env vars)
-  - Consider adding an examples/ directory
-  - Include examples in documentation
-  - **Satisfies**: R2 (Documentation quality)
-  - **Acceptance**: Documentation includes practical examples
+- [ ] **P3-002: Add cookbook entries to docs**
+  - Add a "Cookbook" section to `docs/usage.rst` with practical patterns:
+    - Nested configuration with environment overrides
+    - Using `${VAR}` and `${VAR|default}` env var syntax
+    - Custom validation via `__post_init__` (with the `server_url` example from `main.py`)
+  - **Satisfies**: R58
+  - **Acceptance**:
+    - `docs/usage.rst` has a Cookbook section
+    - At least 3 practical patterns are documented
+    - Code examples are runnable and tested manually
 
-- [ ] **P3-004: Add Validation Documentation**
-  - Document how to validate config beyond types
-  - Show patterns for custom validation
-  - Consider adding a validation callback parameter
-  - **Satisfies**: R2 (Documentation completeness)
-  - **Acceptance**: Users can implement custom validation
+- [ ] **P3-003: Enhance subcommand support**
+  - Add `help` parameter to `@configclass(cmd="name", help="description")` for subcommand help text
+  - Add `aliases` parameter to `@configclass(cmd="check", aliases=["chk", "c"])` for subcommand aliases
+  - Pass help and aliases through to `subparsers.add_parser()`
+  - **Satisfies**: R59-R60
+  - **Acceptance**:
+    - `@configclass(cmd="check", help="Run diagnostics")` shows help in `--help` output
+    - `@configclass(cmd="check", aliases=["c"])` allows `python app.py c --verbose`
+    - Tests cover help text and aliases
 
-### Phase 4: Future Considerations (P4 - Low)
+- [ ] **P3-004: Achieve 90%+ test coverage**
+  - Nice-to-have: bring coverage from current ~80% to ≥90%
+  - Single parent task with the following sub-checklist. Each item is a real, named test case.
+    - [ ] Tests for parser fallback branches: tomlev path, tomli path, tomllib stdlib path (R75)
+    - [ ] Tests for error handling branches: WrongTypeError path, generic DaciteError path (R76)
+    - [ ] Tests for user-level config loading: `~/.{name}.toml`, precedence, `user=False` disable (R77)
+    - [ ] Tests for boolean CLI arguments: `store_true` action, `--debug` sets to True, absence uses default (R78)
+    - [ ] Tests for type preservation with complex union types (R48)
+  - Use mocking (`unittest.mock`) to simulate missing parsers
+  - **Satisfies**: R44, R48, R75-R78
+  - **Acceptance**:
+    - `make test-cov` reports ≥ 90% line coverage
+    - All sub-checklist items have at least one passing test
+    - No previously-tested behavior regresses
 
-These are potential future enhancements that could be explored.
+### Phase 4: Parking Lot (P4 - Speculative, No Owner)
 
-- [ ] **P4-001: Add Async Configuration Loading**
-  - Create `get_config_async()` variant
-  - Use `aiofiles` for async file reading
+These are ideas with no current demand or owner. They are kept here so the intent is not lost, but they are **not scheduled** and should not be picked up without explicit user request and a re-evaluation.
+
+- [ ] **P4-001: Async configuration loading**
+  - `get_config_async()` variant using `aiofiles`
   - Useful for async applications
-  - **Satisfies**: R6 (Future extensibility)
-  - **Acceptance**: Async variant works in async context
+  - **No owner, no demand, not scheduled**
 
-- [ ] **P4-002: Add Configuration Hot-Reload**
-  - Watch TOML files for changes
-  - Reload configuration automatically
+- [ ] **P4-002: Configuration hot-reload**
+  - Watch TOML files for changes and reload automatically
   - Useful for long-running services
-  - **Satisfies**: R6 (Future extensibility)
-  - **Acceptance**: Config updates without restart
+  - **No owner, no demand, not scheduled**
 
-- [ ] **P4-003: Add Schema Validation**
-  - Support for validation beyond types
+- [ ] **P4-003: Schema validation (constraint-based)**
   - Add `min`, `max`, `pattern` validators
-  - Consider integration with pydantic
-  - **Satisfies**: R6 (Future extensibility)
-  - **Acceptance**: Validation catches constraint violations
+  - Likely unnecessary: `__post_init__` covers most cases
+  - **No owner, no demand, not scheduled**
 
-- [ ] **P4-004: Support Additional Config Formats**
-  - Add YAML support via extras
-  - Add JSON support
-  - Maintain TOML as default
-  - **Satisfies**: R6 (Future extensibility)
-  - **Acceptance**: Can load from YAML/JSON files
+- [ ] **P4-004: Support additional config formats (YAML, JSON)**
+  - Add YAML/JSON loaders as extras
+  - TOML remains the default
+  - **No owner, no demand, not scheduled**
 
 ## Done
 
-- [x] **P1-003: Make CLI Support Optional** ✅ 2026-05-30 #2
-  - Add `cli=False` parameter to `get_config()` to skip sys.args handling
-  - When `cli=False`, do not invoke argparse (no CLI argument parsing)
-  - Still accept `args` parameter for external injection/pass-through
-  - Adapt error messages to execution context (no CLI arguments when `cli=False`)
-  - Primary use case: library usage (integration in yoker and roomz projects)
-  - **GitHub Issue**: #1
-  - **GitHub PR**: #2
-  - **Satisfies**: Library integration requirement
-  - **Acceptance**:
-    - `get_config(cli=False)` does not parse sys.args
-    - `get_config(cli=False, args=['--option', 'value'])` works for programmatic usage
-    - Error messages indicate library context when `cli=False`
-    - Follows Python Package best practices
-    - Enables integration in yoker and roomz projects
+- [x] **P1-003: Make CLI support optional** ✅ 2026-05-30 (PR #2)
+  - Added `cli=False` parameter to `get_config()` to skip sys.args handling
+  - Adapted error messages for library context
+  - Enabled integration in yoker and roomz projects
+  - **GitHub Issue**: #1 → #2 (PR)
+  - **Satisfies**: R45, R46, R47 (library integration requirements)
 
+- [x] **P1-002: Create missing documentation files** ✅ 2026-05-30
+  - `docs/installation.rst`, `docs/usage.rst`, `docs/api.rst` created
+  - `docs/index.rst` toctree references all three
+  - **Satisfies**: R52, R53, R54, R55, R56, R57
 
-- [x] **P1-002: Create Missing Documentation Files** ✅ 2026-05-30
-  - docs/installation.rst - Installation guide with pip/uv instructions
-  - docs/usage.rst - Detailed usage examples and patterns
-  - docs/api.rst - API reference (can use autodoc)
-  - These files are referenced in docs/index.rst toctree
-  - **Satisfies**: R2 (Documentation completeness)
-  - **Acceptance**: `make docs` builds without warnings, ReadTheDocs can render
-
-- [x] **P1-001: Create Initial Git Commit** ✅ 2026-05-30
-  - The repository has no commits yet - all files are untracked
-  - Create initial commit with all project files
-  - Include: source code, tests, docs, configuration files
-  - **Satisfies**: R1 (Git history requirement)
-  - **Acceptance**: `git log` shows initial commit with all files
+- [x] **P1-001: Create initial git commit** ✅ 2026-05-30
+  - Initial commit with source, tests, docs, configuration
+  - **Satisfies**: R67
