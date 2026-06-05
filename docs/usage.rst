@@ -807,6 +807,212 @@ Create test configuration files:
        config = get_config(Config, name="test", user=False)
        assert config.name == "TestConfig"
 
+Security
+--------
+
+Clevis validates configuration file security by default to protect against
+common vulnerabilities:
+
+- **File permissions**: Rejects files readable by group/other (mode 0o644)
+- **Directory permissions**: Rejects files in world-writable directories
+
+This protects against:
+
+1. **Credential exposure**: Config files with sensitive data readable by other users
+2. **Symlink attacks**: Attackers replacing config files in world-writable directories
+
+Default Behavior (Maximally Strict)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+By default, Clevis rejects configuration files with security issues:
+
+.. code-block:: python
+
+   from clevis import get_config
+
+   # Default: reject insecure configurations
+   config = get_config(Config, name="myapp")
+
+This will raise ``SecurityError`` if either:
+
+- Config file is readable by group/other (``chmod 644`` vs ``chmod 600``)
+- Config file is in a world-writable directory (like ``/tmp``)
+
+Disable Security Checks
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+For trusted environments (containers, development):
+
+.. code-block:: python
+
+   from clevis import get_config, SecurityAction
+
+   # Skip all security checks
+   config = get_config(
+       Config,
+       name="myapp",
+       security={
+           "file_permissions": SecurityAction.DONT_CHECK,
+           "directory_permissions": SecurityAction.DONT_CHECK
+       }
+   )
+
+Log Security Issues
+~~~~~~~~~~~~~~~~~~~
+
+For development with monitoring:
+
+.. code-block:: python
+
+   from clevis import get_config, SecurityAction
+
+   # Log warnings instead of rejecting
+   config = get_config(
+       Config,
+       name="myapp",
+       security={
+           "file_permissions": SecurityAction.LOG,
+           "directory_permissions": SecurityAction.LOG
+       }
+   )
+
+Fine-Grained Control
+~~~~~~~~~~~~~~~~~~~~~
+
+Configure each security check independently:
+
+.. code-block:: python
+
+   from clevis import get_config, SecurityAction
+
+   # Check file permissions, ignore directory
+   config = get_config(
+       Config,
+       name="myapp",
+       security={
+           "file_permissions": SecurityAction.REJECT,  # Strict
+           "directory_permissions": SecurityAction.DONT_CHECK  # Skip
+       }
+   )
+
+Security Actions
+~~~~~~~~~~~~~~~
+
+.. list-table::
+   :widths: 20 80
+
+   * - ``SecurityAction.DONT_CHECK``
+     - Skip validation entirely
+   * - ``SecurityAction.LOG``
+     - Log warning, continue loading
+   * - ``SecurityAction.REJECT``
+     - Raise ``SecurityError`` (default)
+
+Fixing Security Issues
+~~~~~~~~~~~~~~~~~~~~~~~
+
+**File permissions:**
+
+.. code-block:: bash
+
+   # Secure: owner read/write only
+   chmod 600 ~/.myapp.toml
+
+   # Check current permissions
+   ls -la ~/.myapp.toml
+   # -rw------- 1 user user 1234 Jan  1 12:00 ~/.myapp.toml
+
+**Directory permissions:**
+
+.. code-block:: bash
+
+   # Move config from world-writable location
+   mv /tmp/myapp.toml ~/.myapp.toml
+
+   # Or secure the directory (not recommended for shared systems)
+   chmod 755 ~/myproject
+
+Trusted Locations
+~~~~~~~~~~~~~~~~~
+
+Clevis trusts certain locations and skips security checks:
+
+- **User's home directory** (``~/.myapp.toml``) — directory check is skipped
+- **Non-existent files** — all checks are skipped (no file to attack)
+
+Security Error Example
+~~~~~~~~~~~~~~~~~~~~~~
+
+When security validation fails:
+
+.. code-block:: text
+
+   SecurityError: Configuration file /tmp/myapp.toml is readable by group/other (mode 0o644).
+   Use 'chmod 600 /tmp/myapp.toml' to fix.
+
+Or:
+
+.. code-block:: text
+
+   SecurityError: Directory /tmp is world-writable (mode 0o777).
+   This allows symlink attacks. Move config to a secure location.
+
+Testing with Security
+~~~~~~~~~~~~~~~~~~~~~
+
+In tests with temporary files, disable security checks:
+
+.. code-block:: python
+
+   import tempfile
+   from pathlib import Path
+   from clevis import get_config, SecurityAction
+
+   def test_with_temp_file():
+       with tempfile.TemporaryDirectory() as tmpdir:
+           config_file = Path(tmpdir) / "test.toml"
+           config_file.write_text("name = \"test\"\n")
+
+           # Temp files have insecure permissions, skip checks
+           config = get_config(
+               Config,
+               name="test",
+               user=False,
+               project=True,
+               args=[],
+               security={
+                   "file_permissions": SecurityAction.DONT_CHECK,
+                   "directory_permissions": SecurityAction.DONT_CHECK
+               }
+           )
+           assert config.name == "test"
+
+TOCTOU-Safe Implementation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Clevis uses a TOCTOU-safe (Time-of-Check-Time-of-Use) implementation for file
+permission validation to prevent race conditions:
+
+**How it works:**
+
+1. Opens the file with ``os.open()`` to get a file descriptor
+2. Checks permissions on the opened file descriptor using ``os.fstat()``
+3. Passes the file descriptor to the TOML parser for reading
+
+This prevents an attacker from modifying the file between the permission check
+and the file read, eliminating a common security vulnerability.
+
+**Why this matters:**
+
+Without this protection, an attacker could:
+
+1. See the security check pass on a file
+2. Quickly replace or modify the file during the race window
+3. Have the application read a compromised file
+
+The TOCTOU-safe implementation ensures that the file checked is the same file
+read, preventing this attack vector.
+
 Complete Example
 ----------------
 
