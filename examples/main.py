@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from rich.pretty import pprint
 
-from clevis import get_config
+from clevis import get_config, SecurityAction
 
 
 @dataclass
@@ -33,7 +33,9 @@ class FeaturesConfig:
   enabled: bool = False
   name: str | None = None
 
+
 from urllib.parse import urlparse
+
 
 @dataclass
 class AppConfig:
@@ -49,11 +51,13 @@ class AppConfig:
   def __post_init__(self):
     if self.server_url:
       parsed = urlparse(self.server_url)
-      if parsed.scheme not in ('http', 'https'):
-        raise ValueError(
-          f"Invalid server URL: scheme must be http or https, got {parsed.scheme}"
-        )
+      if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Invalid server URL: scheme must be http or https, got {parsed.scheme}")
+
 
 if __name__ == "__main__":
-  config = get_config(AppConfig)
+  config = get_config(
+    AppConfig,
+    security={"file_permissions": SecurityAction.LOG, "directory_permissions": SecurityAction.LOG},
+  )
   pprint(config)
