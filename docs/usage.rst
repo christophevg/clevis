@@ -571,7 +571,7 @@ Running this application:
    Checking with verbose=True
 
 How Subcommands Work
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 When you use ``@configclass(cmd="name")``:
 
@@ -896,7 +896,7 @@ Configure each security check independently:
    )
 
 Security Actions
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
 
 .. list-table::
    :widths: 20 80
@@ -1096,3 +1096,287 @@ Run the application:
 
    # Override from command line
    python main.py --database-host localhost --database-port 5433
+
+Cookbook
+--------
+
+This section provides practical patterns for common configuration scenarios.
+
+Pattern 1: Nested Configuration with Environment Overrides
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This pattern demonstrates how to structure nested configuration with three layers:
+dataclass defaults, environment variables, and TOML files.
+
+**config.py:**
+
+.. code-block:: python
+
+   from dataclasses import dataclass, field
+   from clevis import get_config
+
+   @dataclass
+   class DatabaseConfig:
+     host: str = "localhost"
+     port: int = 5432
+     name: str = "myapp"
+     user: str = "app"
+     password: str | None = None
+
+   @dataclass
+   class CacheConfig:
+     host: str = "localhost"
+     port: int = 6379
+     ttl: int = 3600
+
+   @dataclass
+   class AppConfig:
+     app_name: str = "MyApp"
+     environment: str = "development"
+     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+     cache: CacheConfig = field(default_factory=CacheConfig)
+
+   def load_config():
+     return get_config(AppConfig, name="myapp")
+
+**TOML file (~/.myapp.toml):**
+
+.. code-block:: toml
+
+   app_name = "Production App"
+   environment = "production"
+
+   [database]
+   host = "${DB_HOST}"
+   port = "${DB_PORT}"
+   password = "${DB_PASSWORD}"
+
+   [cache]
+   host = "${REDIS_HOST}"
+   port = "${REDIS_PORT}"
+
+**Usage:**
+
+.. code-block:: python
+
+   import os
+   from config import load_config
+
+   # Set environment variables
+   os.environ["DB_HOST"] = "prod.db.example.com"
+   os.environ["DB_PORT"] = "5433"
+   os.environ["DB_PASSWORD"] = "secret123"
+   os.environ["REDIS_HOST"] = "cache.example.com"
+   os.environ["REDIS_PORT"] = "6380"
+
+   config = load_config()
+
+   # Result:
+   # - app_name = "Production App"  # From TOML
+   # - environment = "production"    # From TOML
+   # - database.host = "prod.db.example.com"  # From env var
+   # - database.port = 5433                    # From env var (converted)
+   # - database.password = "secret123"         # From env var
+   # - database.name = "myapp"                 # From dataclass default
+   # - database.user = "app"                    # From dataclass default
+   # - cache.host = "cache.example.com"         # From env var
+   # - cache.port = 6380                        # From env var
+   # - cache.ttl = 3600                         # From dataclass default
+
+**Override with CLI:**
+
+.. code-block:: bash
+
+   python app.py --database-host localhost --cache-ttl 7200
+
+Pattern 2: Environment Variables with Defaults
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This pattern shows how to use environment variable interpolation with fallback
+values for optional configuration.
+
+**Install with tomlev support:**
+
+.. code-block:: bash
+
+   pip install clevis[tomlev]
+
+**config.py:**
+
+.. code-block:: python
+
+   from dataclasses import dataclass
+   from clevis import get_config
+
+   @dataclass
+   class Config:
+     api_key: str | None = None
+     timeout: int = 30
+     retries: int = 3
+
+   config = get_config(Config, name="myapp")
+
+**TOML file with defaults (./myapp.toml):**
+
+.. code-block:: toml
+
+   # Use environment variable or fallback to default
+   api_key = "${API_KEY}"
+
+   [database]
+   host = "${DB_HOST|localhost}"
+   port = "${DB_PORT|5432}"
+   name = "${DB_NAME|myapp}"
+
+   [cache]
+   enabled = "${CACHE_ENABLED|false}"
+   ttl = "${CACHE_TTL|300}"
+
+**Behavior:**
+
+.. code-block:: python
+
+   # Scenario 1: All env vars set
+   # DB_HOST=prod.db.com DB_PORT=5433 DB_NAME=proddb
+   # Result: database.host="prod.db.com", database.port=5433, database.name="proddb"
+
+   # Scenario 2: No env vars set
+   # Result: database.host="localhost", database.port=5432, database.name="myapp"
+
+   # Scenario 3: Mixed
+   # DB_HOST=prod.db.com (port and name use defaults)
+   # Result: database.host="prod.db.com", database.port=5432, database.name="myapp"
+
+**Important:** All values in TOML are strings. Clevis converts them to the
+appropriate types based on your dataclass field types.
+
+Pattern 3: Custom Validation with __post_init__
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``__post_init__`` for custom validation logic that runs after configuration
+is loaded.
+
+**config.py:**
+
+.. code-block:: python
+
+   from dataclasses import dataclass, field
+   from urllib.parse import urlparse
+   from clevis import get_config
+
+   @dataclass
+   class DatabaseConfig:
+     host: str = "localhost"
+     port: int = 5432
+     name: str = "myapp"
+
+   @dataclass
+   class AppConfig:
+     app_name: str = "MyApp"
+     debug: bool = False
+     server_url: str | None = None
+     database: DatabaseConfig = field(default_factory=DatabaseConfig)
+
+     def __post_init__(self):
+       # Validate server URL format
+       if self.server_url:
+         parsed = urlparse(self.server_url)
+         if parsed.scheme not in ("http", "https"):
+           raise ValueError(
+             f"Invalid server URL: scheme must be http or https, got {parsed.scheme}"
+           )
+
+         # Ensure URL has a host
+         if not parsed.netloc:
+           raise ValueError(
+             f"Invalid server URL: missing host"
+           )
+
+   # This will raise ValueError if server_url is invalid
+   config = get_config(AppConfig, name="myapp")
+
+**Valid configuration:**
+
+.. code-block:: toml
+
+   server_url = "https://api.example.com"
+
+**Invalid configuration:**
+
+.. code-block:: toml
+
+   # Invalid: wrong scheme
+   server_url = "ftp://files.example.com"
+   # Raises: ValueError: Invalid server URL: scheme must be http or https, got ftp
+
+   # Invalid: missing host
+   server_url = "https://"
+   # Raises: ValueError: Invalid server URL: missing host
+
+**Advanced validation example:**
+
+.. code-block:: python
+
+   from dataclasses import dataclass
+   import re
+
+   @dataclass
+   class Config:
+     email: str | None = None
+     phone: str | None = None
+
+     def __post_init__(self):
+       # Validate email format
+       if self.email:
+         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+         if not re.match(email_pattern, self.email):
+           raise ValueError(f"Invalid email format: {self.email}")
+
+       # Validate phone format (simple US format)
+       if self.phone:
+         phone_pattern = r'^\+1-\d{3}-\d{3}-\d{4}$'
+         if not re.match(phone_pattern, self.phone):
+           raise ValueError(
+             f"Invalid phone format: {self.phone}. Expected: +1-XXX-XXX-XXXX"
+           )
+
+       # At least one contact method required
+       if not self.email and not self.phone:
+         raise ValueError("At least one contact method (email or phone) required")
+
+**Testing validation:**
+
+.. code-block:: python
+
+   import pytest
+   from clevis import get_config, ConfigError
+
+   def test_valid_email():
+     config = get_config(
+       Config,
+       name="test",
+       args=["--email", "user@example.com"],
+       user=False,
+       project=False
+     )
+     assert config.email == "user@example.com"
+
+   def test_invalid_email():
+     with pytest.raises(ValueError, match="Invalid email format"):
+       get_config(
+         Config,
+         name="test",
+         args=["--email", "not-an-email"],
+         user=False,
+         project=False
+       )
+
+   def test_no_contact_method():
+     with pytest.raises(ValueError, match="At least one contact method"):
+       get_config(
+         Config,
+         name="test",
+         args=[],
+         user=False,
+         project=False
+       )
