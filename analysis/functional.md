@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-Clevis is a well-designed Python configuration management library that provides type-safe configuration through dataclass schemas. The implementation is feature-complete with support for TOML files, environment variable interpolation, and automatic CLI argument generation. The project follows modern Python best practices with proper typing, comprehensive error messages, and layered configuration merging.
+Clevis is a well-designed Python configuration management library that provides type-safe configuration through dataclass schemas. The implementation is feature-complete with support for TOML files, environment variable interpolation, and automatic CLI argument generation. The Factory pattern (P2-001) extends the library to support multi-module orchestration and CLI subcommands.
 
-**Current Status**: Feature-complete, 78% test coverage, missing documentation files, no git commits yet.
+**Current Status**: v0.2.0 released. Factory pattern and subcommand support implementation in progress (P2-001). ~80% test coverage.
 
 ---
 
@@ -27,6 +27,8 @@ A "clevis" is a U-shaped mechanical fastener that connects components while allo
 - **Layered Config**: Multiple sources with clear precedence
 - **Developer Experience**: Auto-generated CLI arguments, helpful error messages
 - **Extensibility**: Multiple TOML parser options (envtoml, tomlev, tomli, stdlib)
+- **Factory Pattern**: Multi-module orchestration with shared parsers and prefixes
+- **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
 
 ---
 
@@ -45,7 +47,7 @@ A "clevis" is a U-shaped mechanical fastener that connects components while allo
 
 **Quality**: Well-implemented with clear error message when no parser available.
 
-**Test Coverage Gap**: Fallback branches (lines 54-79) not covered - only envtoml is tested since all extras are installed.
+**Test Coverage Gap**: Fallback branches not fully covered - only envtoml is tested since all extras are installed.
 
 ### 2. Configuration Loading (`get_config`)
 
@@ -61,17 +63,160 @@ Dataclass defaults (base)
 
 **Quality**: Clean implementation with proper path handling.
 
-**Test Coverage Gap**: User-level config loading (lines 307-309) not covered.
+**Test Coverage Gap**: User-level config loading not fully covered.
 
-### 3. CLI Argument Generation (`get_args_config`)
+### 3. Factory Pattern (P2-001)
 
-**Implementation**: Automatic argparse generation from dataclass
+The Factory pattern enables four distinct use cases:
 
-- Nested fields become dashed arguments: `database.host` -> `--database-host`
-- Boolean fields use `store_true` action
-- Types preserved through argparse type parameter
+#### Use Case 1: Simple Configuration
 
-**Test Coverage Gap**: Boolean `store_true` action (line 233) not covered.
+The simplest case - direct `get_config()` call without any factory setup:
+
+```python
+from clevis import get_config
+from dataclasses import dataclass
+
+@dataclass
+class Config:
+    name: str = "MyApp"
+    debug: bool = False
+
+config = get_config(Config, name="myapp")
+```
+
+Clevis automatically creates a factory with the default parser. No setup required.
+
+#### Use Case 2: Module Development
+
+For library/module developers who want their module to be configurable:
+
+```python
+from clevis import configclass, get_config
+
+@configclass
+class ModuleConfig:
+    api_key: str | None = None
+    timeout: int = 30
+
+class MyModule:
+    def __init__(self):
+        self.config = get_config(ModuleConfig, name="mymodule")
+```
+
+The `@configclass` decorator:
+1. Applies `@dataclass` to the class
+2. Registers it with Clevis's factory system
+
+Orchestration code can later customize the factory before the module is instantiated.
+
+#### Use Case 3: Multi-Module Orchestration
+
+For CLI applications that use multiple modules, each with their own configuration:
+
+```python
+import argparse
+from clevis import configclass, get_config, get_factory
+
+# Module 1's config
+@configclass
+class App1Config:
+    name: str | None = None
+
+# Module 2's config
+@configclass
+class App2Config:
+    name: str | None = None
+
+# Orchestration: configure factories before instantiation
+get_factory(App1Config).prefix = "app1"
+get_factory(App2Config).prefix = "app2"
+
+# Share a single parser
+parser = argparse.ArgumentParser(description="Multi-Module App")
+get_factory(AppConfig).parser = parser
+get_factory(App1Config).parser = parser
+get_factory(App2Config).parser = parser
+
+# Modules get their config automatically
+# CLI args: --app1-name X --app2-name Y
+app1 = App1()  # Uses prefixed args: --app1-name
+app2 = App2()  # Uses prefixed args: --app2-name
+```
+
+#### Use Case 4: Subcommands (NEW)
+
+For CLI applications with multiple commands (like `git`, `docker`):
+
+```python
+from clevis import configclass, get_cmd, get_config
+
+@configclass(cmd="check")
+class CheckConfig:
+    verbose: bool = False
+
+@configclass(cmd="print")
+class PrintConfig:
+    rich: bool = False
+
+if __name__ == "__main__":
+    cmd = get_cmd()
+    if cmd == "check":
+        config = get_config(CheckConfig, project=False, user=False)
+        print(f"checking verbose={config.verbose}")
+    elif cmd == "print":
+        config = get_config(PrintConfig, project=False, user=False)
+        print(config)
+```
+
+Running:
+```bash
+python app.py --help           # Shows: {check, print} subcommands
+python app.py check --help     # Shows: --verbose
+python app.py check --verbose  # Runs: checking verbose=True
+```
+
+#### Factory Architecture
+
+```
+@configclass → registers → _factories[type] = Factory(config_class)
+                               ↓
+get_factory(Config) → returns → Factory instance
+                               ↓
+Factory.prefix = "app1" → customizes → CLI arg prefix
+Factory.parser = custom → injects → Custom/shared parser
+Factory.cmd = "check" → creates → Subparser for command
+                               ↓
+get_config(Config) → triggers → Factory.configure_parser()
+                               ↓
+                        Factory.get_args() → parses CLI → dict
+                               ↓
+get_cmd() → returns → Active subcommand name
+```
+
+#### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `@configclass` | Decorator that registers dataclass with factory system |
+| `@configclass(cmd="name")` | Decorator that registers config as subcommand |
+| `get_factory(clz)` | Returns singleton Factory for a config class |
+| `get_cmd()` | Returns active subcommand name |
+| `Factory.config_class` | The dataclass type being configured |
+| `Factory.prefix` | Optional prefix for CLI arguments |
+| `Factory.parser` | The argparse-compatible parser to use |
+| `Factory.cmd` | Optional subcommand name |
+| `Factory.sub_parser` | Subparser instance (when cmd is set) |
+| `Factory._configured` | Flag to prevent double configuration |
+| `Factory.configure_parser()` | Lazily adds arguments to parser |
+| `Factory.get_args()` | Parses CLI and returns dict with dotted keys |
+| `Factory.list_fields()` | Exposes field structure for introspection |
+| `Parser` Protocol | Interface for argparse-compatible parsers |
+| `SubParser` Protocol | Interface for subparser operations |
+| `get_sub_parser(parser)` | Creates or returns existing subparser |
+| `_configured_parsers` | Tracks which parsers have been configured |
+| `_sub_parsers` | Maps parsers to their subparsers |
+| `_reset_factories()` | Clears all factories (for testing) |
 
 ### 4. Dictionary Merging (`apply_to_dict`)
 
@@ -102,7 +247,7 @@ Provide this value in one of these ways:
 ======================================================================
 ```
 
-**Test Coverage Gap**: `WrongTypeError` and generic `DaciteError` branches (lines 339-353) not covered.
+**Test Coverage Gap**: `WrongTypeError` and generic `DaciteError` branches not fully covered.
 
 ---
 
@@ -112,12 +257,15 @@ Provide this value in one of these ways:
 
 1. **Clean Separation of Concerns**
    - Parser selection isolated in `_get_toml_parser`
-   - CLI generation separate from config loading
+   - Factory pattern separates config definition from parser orchestration
+   - Subcommand handling integrated into Factory pattern
    - Dictionary utilities are pure functions
 
 2. **Extensibility**
    - Multiple TOML parser options via extras
-   - Clear integration points for new parsers
+   - Pluggable parser via `Parser` Protocol
+   - Factory pattern enables multi-module orchestration
+   - Subcommands enable CLI application patterns
    - Optional user/project config loading
 
 3. **Type Safety**
@@ -132,9 +280,12 @@ Provide this value in one of these ways:
 
 ### Design Patterns Used
 
-- **Module-level singleton**: `_toml_load` cached parser
-- **Factory pattern**: `_get_toml_parser` returns appropriate loader
-- **Builder pattern**: Layered config construction
+- **Factory pattern**: `Factory` dataclass manages parser configuration
+- **Decorator pattern**: `@configclass` registers dataclass with factory
+- **Singleton pattern**: `get_factory()` returns same Factory for same class
+- **Lazy initialization**: Parser configured on first `get_config()` call
+- **Protocol pattern**: `Parser` and `SubParser` Protocols for pluggable parsers
+- **Module-level caching**: `_toml_load` cached parser, `_factories` registry
 
 ### Dependencies
 
@@ -147,6 +298,35 @@ Provide this value in one of these ways:
 
 ---
 
+## Code Quality Issues (From Code Review)
+
+### Must Fix Before Merge (P2-001)
+
+| Issue | Location | Description | Status |
+|-------|----------|-------------|--------|
+| Debug print statement | Line 141 in `get_args()` | `print(args_dict)` left in production code | ✅ Fixed |
+| `_sub_parsers` not reset | `_reset_factories()` | Global not cleared in test isolation | Pending |
+| Duplicate import | Lines 20 and 202 | `typing.Callable` imported twice | Pending |
+| Type annotation missing | `Parser.add_subparsers()` | No return type annotation | Pending |
+
+### Should Fix Before Merge
+
+| Issue | Location | Description |
+|-------|----------|-------------|
+| Subparser shared state | `_sub_parsers` dict | May have stale entries after parser changes |
+| SubParser Protocol incomplete | `SubParser` | Minimal protocol, doesn't cover all argparse features |
+| Type mismatch | Example usage | `project=None` passed where `project: bool` expected |
+
+### Nice to Have
+
+| Issue | Description |
+|-------|-------------|
+| Subcommand help text | No way to specify help text for subcommands |
+| Subcommand aliases | No way to specify aliases for subcommands |
+| `_configured` naming | Private attribute used in public method |
+
+---
+
 ## Quality Assessment
 
 ### Code Quality
@@ -156,34 +336,49 @@ Provide this value in one of these ways:
 | Type Hints | Complete | All functions fully typed |
 | Documentation | Good | Docstrings for all public functions |
 | Code Style | Excellent | Follows ruff/mypy standards |
-| Complexity | Low | Functions are focused and small |
+| Complexity | Medium | Factory pattern + subcommands add complexity but justified |
 | Error Handling | Good | Custom exception with helpful messages |
 
 ### Test Quality
 
-**Coverage**: 78% (136 statements, 26 missed)
+**Coverage**: ~80% (before P2-001 tests complete)
 
-**Uncovered Areas**:
+**Test Gaps (addressed in P2-001)**:
 
-1. **Parser Fallback Branches** (lines 54-79)
+1. **Factory Pattern Tests**
+   - `@configclass` decorator
+   - `get_factory()` singleton behavior
+   - `Factory.prefix` application
+   - Shared parser (multiple configs, one parser)
+   - Lazy parser configuration
+   - `Factory.get_args()` with prefix stripping
+   - `_reset_factories()` test isolation
+
+2. **Subcommand Tests (NEW)**
+   - `@configclass(cmd="check")` registers subcommand
+   - `get_cmd()` returns correct command
+   - Subcommand arguments parsed correctly
+   - Multiple subcommands work together
+   - `_reset_factories()` clears `_sub_parsers`
+
+3. **Parser Fallback Branches**
    - tomlev parser code path
    - tomli parser code path
    - tomllib stdlib fallback
 
-2. **Error Handling** (lines 339-353)
+4. **Error Handling Branches**
    - `WrongTypeError` handling
    - Generic `DaciteError` handling
 
-3. **Edge Cases** (line 177, 233)
+5. **Edge Cases**
    - Complex union types (>2 types)
    - Boolean `store_true` action
-
-4. **User-Level Config** (lines 307-309)
-   - Loading from `~/.{name}.toml`
+   - User-level config loading
 
 **Test Organization**:
 - `test_clevis.py`: Core functionality tests
 - `test_parser.py`: Parser selection tests
+- `test_factory.py`: Factory pattern tests (to be created)
 
 ### Documentation Status
 
@@ -192,107 +387,82 @@ Provide this value in one of these ways:
 | README.md | Complete | Full usage documentation |
 | docs/conf.py | Complete | Sphinx configuration |
 | docs/index.rst | Complete | Index page with toctree |
-| docs/installation.rst | **Missing** | Referenced but not created |
-| docs/usage.rst | **Missing** | Referenced but not created |
-| docs/api.rst | **Missing** | Referenced but not created |
+| docs/installation.rst | Complete | Installation guide |
+| docs/usage.rst | Needs Update | Factory pattern + subcommand sections to add |
+| docs/api.rst | Complete | API reference |
 
 ---
 
-## Identified Gaps and Opportunities
+## Examples
 
-### Critical Gaps
+### `examples/factory.py`
 
-1. **No Git Commits**
-   - Repository initialized but no initial commit
-   - All files are untracked
+Demonstrates three use cases:
+1. Simple configuration (MyConfig)
+2. Module development (App1Config, App2Config)
+3. Multi-module orchestration (shared parser, prefixes)
 
-2. **Missing Documentation Files**
-   - `docs/installation.rst` - Referenced in toctree
-   - `docs/usage.rst` - Referenced in toctree
-   - `docs/api.rst` - Referenced in toctree
+### `examples/commands.py`
 
-### Test Coverage Gaps
-
-3. **Parser Fallback Testing**
-   - Only envtoml is tested
-   - tomlev, tomli, tomllib paths need coverage
-
-4. **Error Branch Testing**
-   - `WrongTypeError` path not tested
-   - Generic `DaciteError` path not tested
-
-5. **User-Level Config Testing**
-   - No test for `~/.{name}.toml` loading
-
-6. **Boolean CLI Arguments**
-   - `store_true` action not tested
-
-### Code Quality Issues
-
-7. **Unused File**
-   - `project.toml` is example/test file not in .gitignore
-   - Should be renamed to clarify purpose or moved
-
-8. **Version Synchronization**
-   - Version in both `pyproject.toml` and `__init__.py`
-   - Need to keep in sync (Makefile has check)
-
-### Future Opportunities
-
-9. **Type Stubs**
-   - Could provide `.pyi` stubs for better IDE support
-
-10. **Async Support**
-    - Could add async file loading for async applications
-
-11. **Schema Validation**
-    - Could add validation beyond types (min/max, patterns)
-
-12. **Config Hot-Reload**
-    - Could watch config files for changes
+Demonstrates subcommand use case:
+- `@configclass(cmd="check")` for check command
+- `@configclass(cmd="print")` for print command
+- `get_cmd()` to dispatch based on command
+- `project=False, user=False` to skip config files
 
 ---
 
 ## Recommendations
 
-### Before First Release (P1)
+### Immediate (P2-001 Completion)
 
-1. **Create Initial Commit**
-   - Commit all current files
-   - Establish proper git history
+1. **Fix remaining code quality issues**
+   - Add `_sub_parsers` reset to `_reset_factories()`
+   - Remove duplicate import
+   - Add return type to `Parser.add_subparsers()`
 
-2. **Complete Documentation**
-   - Create missing .rst files
-   - Ensure ReadTheDocs builds pass
+2. **Add comprehensive tests**
+   - Factory pattern tests (R79-R85)
+   - Subcommand tests (R86-R90)
 
-### Before PyPI Publication (P2)
+3. **Update documentation**
+   - Factory pattern section in `docs/usage.rst`
+   - Subcommand section in `docs/usage.rst`
+   - Update API reference
 
-3. **Improve Test Coverage to 90%+**
-   - Add tests for parser fallback branches
-   - Add tests for error handling paths
-   - Add tests for user-level config loading
-   - Add tests for boolean CLI arguments
+### Near-Term (P2-002, P3)
 
-4. **Clean Up Repository**
-   - Move/rename `project.toml` to example or test fixture
-   - Add it to .gitignore if it's a local test file
+4. **Security Parameter**
+   - Implement file permission validation
+   - Implement directory security validation
 
-### Future Enhancements (P3-P4)
+5. **Improve Test Coverage**
+   - Target 90%+ coverage
+   - Cover all fallback branches
 
-5. **Add Type Stubs**
+### Future (P3, P4)
+
+6. **Type Stubs**
    - Improve IDE experience
 
-6. **Consider Async API**
-   - Add async variant for async applications
+7. **Subcommand Enhancements (P3-003)**
+   - Add `help` parameter for subcommand help text
+   - Add `aliases` parameter for subcommand aliases
 
 ---
 
 ## Conclusion
 
-Clevis is a well-architected, feature-complete configuration library. The core implementation is solid with good separation of concerns and helpful error messages. The primary blockers for release are:
+Clevis is a well-architected configuration library. The Factory pattern (P2-001) significantly enhances its capabilities for:
 
-1. No git history (trivial to fix)
-2. Missing documentation files (straightforward)
-3. Test coverage at 78% (should be improved to 90%+)
+1. **Simple use cases**: Direct `get_config()` for single-app configuration
+2. **Module development**: `@configclass` for library developers
+3. **Orchestration**: Factory customization for multi-module CLI apps
+4. **Subcommands**: CLI applications with multiple commands
 
-The codebase demonstrates good Python practices and is ready for release after addressing the P1 and P2 items. The architecture allows for future enhancements without breaking changes.
+Key priorities:
+1. Complete remaining code quality fixes (duplicate import, `_sub_parsers` reset)
+2. Add comprehensive tests for Factory and subcommand patterns
+3. Update documentation
+4. Implement P2-002 security parameter
+5. Achieve 90%+ test coverage

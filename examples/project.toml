@@ -1,4 +1,6 @@
-# env.toml
+# project.toml
+
+name = "project.toml > name"
 app_name = "My Application"
 # debug = true
 environment = "${ENV}"
