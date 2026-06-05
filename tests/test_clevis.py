@@ -18,6 +18,9 @@ from clevis import (
   Factory,
   unpack_type,
   ConfigError,
+  SecurityAction,
+  SecurityConfig,
+  SecurityError,
   _get_toml_parser,
   _load_toml,
   _reset_factories,
@@ -168,7 +171,18 @@ class TestGetConfig:
       original_dir = os.getcwd()
       try:
         os.chdir(tmpdir)
-        config = get_config(Config, name="test", user=False, project=True, args=[])
+        # Temp files have insecure permissions, skip security checks
+        config = get_config(
+          Config,
+          name="test",
+          user=False,
+          project=True,
+          args=[],
+          security={
+            "file_permissions": SecurityAction.DONT_CHECK,
+            "directory_permissions": SecurityAction.DONT_CHECK,
+          },
+        )
         assert config.name == "from_toml"
         assert config.value == 100
       finally:
@@ -315,7 +329,18 @@ class TestConfigError:
       try:
         os.chdir(tmpdir)
         # This should work since host is optional (str | None)
-        config = get_config(Config, name="test", user=False, project=True, args=[])
+        # Temp files have insecure permissions, skip security checks
+        config = get_config(
+          Config,
+          name="test",
+          user=False,
+          project=True,
+          args=[],
+          security={
+            "file_permissions": SecurityAction.DONT_CHECK,
+            "directory_permissions": SecurityAction.DONT_CHECK,
+          },
+        )
         assert config.database.host is None
         assert config.database.port == 5432
       finally:
@@ -437,9 +462,7 @@ class TestSubcommands:
     _reset_factories()
 
     parser = argparse.ArgumentParser()
-    factory = get_factory(
-      type("Config", (), {"__dataclass_fields__": {}, "__annotations__": {}})
-    )
+    factory = get_factory(type("Config", (), {"__dataclass_fields__": {}, "__annotations__": {}}))
     factory.parser = parser
     factory.cmd = "check"
 

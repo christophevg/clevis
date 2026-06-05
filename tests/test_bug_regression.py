@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from clevis import ConfigError, get_config, _reset_factories
+from clevis import ConfigError, get_config, _reset_factories, SecurityAction
 
 
 def test_config_error_suppresses_internal_traceback():
@@ -51,9 +51,7 @@ def test_config_error_message_format():
   _reset_factories()
 
   error = ConfigError(
-    message="Required field has no value",
-    field_path="database.host",
-    config_name="project"
+    message="Required field has no value", field_path="database.host", config_name="project"
   )
 
   error_str = str(error)
@@ -95,14 +93,26 @@ def test_wrong_type_error_chaining():
   # Provide wrong type
   with tempfile.TemporaryDirectory() as tmpdir:
     config_file = Path(tmpdir) / "test.toml"
-    config_file.write_text("count = \"not a number\"\n")
+    config_file.write_text('count = "not a number"\n')
 
     import os
+
     original_dir = os.getcwd()
     try:
       os.chdir(tmpdir)
       with pytest.raises(ConfigError) as exc_info:
-        get_config(Config, name="test", user=False, project=True, args=[])
+        # Temp files have insecure permissions, skip security checks
+        get_config(
+          Config,
+          name="test",
+          user=False,
+          project=True,
+          args=[],
+          security={
+            "file_permissions": SecurityAction.DONT_CHECK,
+            "directory_permissions": SecurityAction.DONT_CHECK,
+          },
+        )
     finally:
       os.chdir(original_dir)
 
