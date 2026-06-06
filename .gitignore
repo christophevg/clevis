@@ -25,5 +25,5 @@ htmlcov/
 .DS_Store
 
 # Documentation
-docs/_build/reporting
-_build
+docs/_build/
+reporting
