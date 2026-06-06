@@ -1,0 +1,5 @@
+name = "name"
+
+[tool.settings]
+x = 1
+y = 2
