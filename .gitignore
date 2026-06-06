@@ -26,3 +26,4 @@ htmlcov/
 
 # Documentation
 docs/_build/reporting
+_build
