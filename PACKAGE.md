@@ -353,6 +353,62 @@ apply_to_dict(args, dct)
 
 ## Common Patterns
 
+### Using @configclass
+
+The `@configclass` decorator combines `@dataclass` with automatic factory registration. It can be used on any configuration class, not just subcommands:
+
+```python
+from clevis import configclass, get_config
+
+# Basic usage - replaces @dataclass + get_factory
+@configclass
+class AppConfig:
+  name: str = "default"
+  debug: bool = False
+
+# The decorator:
+# 1. Applies @dataclass to the class
+# 2. Registers a Factory singleton for the class
+# 3. Enables prefix customization via get_factory()
+
+config = get_config(AppConfig, name="app")
+```
+
+**When to use:**
+
+| Scenario | Use `@configclass` |
+|----------|-------------------|
+| Simple configuration | Yes - cleaner than `@dataclass` + manual factory |
+| Multi-module apps | Yes - enables prefix customization |
+| Subcommands | Yes - with `cmd` parameter |
+| Library configuration | Yes - works with `cli=False` |
+
+**Comparison with `@dataclass`:**
+
+```python
+# Without @configclass
+from dataclasses import dataclass
+from clevis import get_config, get_factory
+
+@dataclass
+class AppConfig:
+  name: str = "default"
+
+factory = get_factory(AppConfig)
+factory.prefix = "app"  # Manual factory setup needed
+config = get_config(AppConfig, name="app")
+
+# With @configclass (cleaner)
+from clevis import configclass, get_config
+
+@configclass
+class AppConfig:
+  name: str = "default"
+
+get_factory(AppConfig).prefix = "app"  # Factory already registered
+config = get_config(AppConfig, name="app")
+```
+
 ### Nested Configuration
 
 ```python
@@ -484,6 +540,130 @@ python app.py check --verbose
 python app.py c --verbose  # Using alias
 ```
 
+### Mixing Globals with Subcommands
+
+For CLI applications with both global options and subcommands, define a globals configuration alongside subcommand configurations:
+
+```python
+from dataclasses import dataclass
+from clevis import configclass, get_cmd, get_config
+
+# Global options available to all subcommands
+@configclass
+class Globals:
+  directory: str = "."
+  verbose: bool = False
+
+# Base configuration for shared fields
+@dataclass
+class BaseConfig:
+  parameter: str | None = None
+
+# Subcommand configurations
+@configclass(cmd="check", help="Run diagnostics", aliases=["c", "chk"])
+class CheckConfig(BaseConfig):
+  verbose: bool = False
+
+@configclass(cmd="echo")
+class EchoConfig(BaseConfig):
+  pass
+
+if __name__ == "__main__":
+  # Parse globals first
+  globals_config = get_config(Globals)
+  
+  # Then dispatch to subcommand
+  cmd = get_cmd()
+  if cmd == "check":
+    config = get_config(CheckConfig, security={"file_permissions": SecurityAction.LOG})
+    print(f"Checking (verbose={config.verbose})")
+  elif cmd == "echo":
+    config = get_config(EchoConfig, security={"file_permissions": SecurityAction.LOG})
+    print(config.parameter)
+```
+
+**Pattern structure:**
+
+1. Define `Globals` class with `@configclass` (no `cmd` parameter)
+2. Optional: Define `BaseConfig` with shared fields using `@dataclass`
+3. Define subcommands with `@configclass(cmd="name")`
+4. Load globals first, then dispatch based on `get_cmd()`
+
+**Best practices:**
+- Use `@dataclass` for base configurations (no factory needed)
+- Use `@configclass` for globals and subcommands
+- Set `project=False, user=False` on subcommand configs if they don't need file loading
+- Use `SecurityAction.LOG` for development
+
+### Configuration Inheritance
+
+Dataclass inheritance works seamlessly with `@configclass` for sharing fields across configurations:
+
+```python
+from dataclasses import dataclass
+from clevis import configclass, get_config
+
+# Base configuration with shared fields
+@dataclass
+class BaseConfig:
+  parameter: str | None = None
+  timeout: int = 30
+
+# Subcommands inherit shared fields
+@configclass(cmd="run")
+class RunConfig(BaseConfig):
+  port: int = 8080
+  workers: int = 4
+
+@configclass(cmd="test")
+class TestConfig(BaseConfig):
+  coverage: bool = False
+
+# Both RunConfig and TestConfig have:
+# - parameter: str | None
+# - timeout: int
+# - Plus their own specific fields
+```
+
+**Inheritance patterns:**
+
+```python
+# Pattern 1: Shared fields across subcommands
+@dataclass
+class CommonConfig:
+  verbose: bool = False
+  log_level: str = "INFO"
+
+@configclass(cmd="build")
+class BuildConfig(CommonConfig):
+  output: str = "dist/"
+
+@configclass(cmd="deploy")
+class DeployConfig(CommonConfig):
+  environment: str = "staging"
+
+# Pattern 2: Domain-specific base classes
+@dataclass
+class DatabaseConfig:
+  host: str = "localhost"
+  port: int = 5432
+
+@dataclass
+class CacheConfig:
+  redis_host: str = "localhost"
+  redis_port: int = 6379
+
+@configclass
+class AppConfig(DatabaseConfig, CacheConfig):
+  name: str = "MyApp"
+```
+
+**Key points:**
+- Use `@dataclass` for base classes (no factory registration needed)
+- Use `@configclass` for final configuration classes
+- Multiple inheritance works as expected with dataclasses
+- Field defaults from base classes are preserved
+
 ### Security Configuration
 
 By default, Clevis performs security checks on configuration files:
@@ -496,16 +676,16 @@ Control security behavior with the `security` parameter:
 ```python
 from clevis import SecurityAction, SecurityConfig, get_config
 
-# Default: reject insecure configs
+# Default: reject insecure configs (production)
 config = get_config(Config, name="app")  # Raises SecurityError if insecure
 
-# Log warnings but continue
+# Recommended for development: log warnings but continue
 config = get_config(Config, name="app", security={
   "file_permissions": SecurityAction.LOG,
   "directory_permissions": SecurityAction.LOG,
 })
 
-# Skip all security checks (development/testing only)
+# Skip all security checks (testing only)
 config = get_config(Config, name="app", security={
   "file_permissions": SecurityAction.DONT_CHECK,
   "directory_permissions": SecurityAction.DONT_CHECK,
@@ -513,9 +693,42 @@ config = get_config(Config, name="app", security={
 ```
 
 **Security recommendations:**
-- Use `REJECT` (default) for production
-- Use `LOG` for development to be notified of issues
-- Use `DONT_CHECK` only in controlled test environments
+
+| Environment | Recommended Action | Why |
+|------------|-------------------|-----|
+| Production | `REJECT` (default) | Security-sensitive, fail fast on issues |
+| Development | `LOG` | See warnings during development without blocking |
+| Testing | `DONT_CHECK` | Clean test isolation without file permission setup |
+
+**Best practice for development:**
+
+```python
+# Development environment - use LOG
+security = {
+  "file_permissions": SecurityAction.LOG,
+  "directory_permissions": SecurityAction.LOG,
+}
+
+# Production environment - use default (REJECT)
+# No security parameter needed
+
+config = get_config(Config, name="app", security=security)
+```
+
+**Security error handling:**
+
+```python
+from clevis import SecurityError, SecurityAction
+
+try:
+  config = get_config(Config, name="app")
+except SecurityError as e:
+  print(f"Security issue detected:")
+  print(f"  Path: {e.path}")
+  print(f"  Check: {e.check}")
+  # Options: fix permissions, use LOG, or use DONT_CHECK
+  raise
+```
 
 ### Testing with Configuration
 
@@ -603,15 +816,22 @@ Clevis automatically selects the best available TOML parser:
   - `@configclass` decorator combines `@dataclass` with factory registration
   - Support for custom CLI argument prefixes
   - Custom parser support
+  - Works with any configuration class, not just subcommands
 - **Subcommands**: CLI applications with multiple commands
   - `@configclass(cmd="name")` for subcommand registration
   - `help` and `aliases` parameters for subcommand documentation
   - `get_cmd()` function to retrieve active subcommand
+  - Mix global options with subcommands using separate config classes
+- **Configuration Inheritance**: Share fields across configurations
+  - Use `@dataclass` for base classes with shared fields
+  - Use `@configclass` for final configuration classes
+  - Multiple inheritance supported for combining configurations
 - **Security Checks**: File and directory permission validation
   - `SecurityAction` enum: `DONT_CHECK`, `LOG`, `REJECT`
   - `SecurityConfig` typed dict for security configuration
   - `SecurityError` exception for rejected configs
   - TOCTOU-safe file permission checks using file descriptors
+  - `LOG` action recommended for development (logs warnings, continues)
 - **Type Stubs**: Added `py.typed` marker and type stub files for IDE support
 
 **Improvements:**
