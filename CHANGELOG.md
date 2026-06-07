@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.3 (2026-06-07)
+
+### Added
+- Support for `Literal["A", "B", "C"]` types with validation
+- Support for container types: `list[T]`, `dict[K, V]`, `set[T]`, `tuple[T, ...]`
+- Automatic conversion of TOML arrays to `tuple` and `set` types
+- Support for nested dataclasses as dict values: `dict[str, DataclassType]`
+- Compatibility with `frozen=True` dataclasses
+
+### Changed
+- Enhanced `unpack_type()` to properly handle container types and Literal types
+- Updated `from_dict()` to use `Config(cast=[tuple, set])` for automatic type casting
+- Improved type hints with `Union` and `get_origin` imports
+
+### Fixed
+- `unpack_type()` now correctly returns container types as-is instead of treating them as unions
+- `unpack_type()` now correctly returns Literal types as-is for dacite validation
+
 ## 0.3.2 (2026-06-07)
 
 ### Added

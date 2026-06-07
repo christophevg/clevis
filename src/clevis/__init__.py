@@ -26,7 +26,7 @@ from typing import Any, Literal, Protocol, TypedDict, TypeVar, Union, get_args, 
 from dacite import Config, from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 logger = logging.getLogger(__name__)
 
