@@ -430,4 +430,3 @@ class TestIntegration:
         assert exc_info.value.check == "file_permissions"
       finally:
         os.chdir(original_dir)
-

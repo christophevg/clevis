@@ -156,14 +156,14 @@ class TestTOMLRootAndSection:
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # Root fields AND [print] section
-      config_file.write_text('''
+      config_file.write_text("""
 verbose = true
 output = "root"
 
 [print]
 verbose = false
 output = "section"
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -203,7 +203,7 @@ class TestEmptyTOMLSection:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\n')  # Empty section
+      config_file.write_text("[print]\n")  # Empty section
 
       original_dir = os.getcwd()
       try:
@@ -235,7 +235,7 @@ class TestEmptyTOMLSection:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\n  \n# comment\n')
+      config_file.write_text("[print]\n  \n# comment\n")
 
       original_dir = os.getcwd()
       try:
@@ -293,7 +293,9 @@ class TestTOMLNonDictValue:
             },
           )
         # Verify it's a ConfigError with helpful message
-        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(exc_info.value)
+        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(
+          exc_info.value
+        )
       finally:
         os.chdir(original_dir)
 
@@ -311,7 +313,7 @@ class TestTOMLNonDictValue:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('print = 42\n')
+      config_file.write_text("print = 42\n")
 
       original_dir = os.getcwd()
       try:
@@ -329,7 +331,9 @@ class TestTOMLNonDictValue:
             },
           )
         # Verify it's a ConfigError with helpful message
-        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(exc_info.value)
+        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(
+          exc_info.value
+        )
       finally:
         os.chdir(original_dir)
 
@@ -365,7 +369,9 @@ class TestTOMLNonDictValue:
             },
           )
         # Verify it's a ConfigError with helpful message
-        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(exc_info.value)
+        assert "must be a table" in str(exc_info.value) or "Configuration Error" in str(
+          exc_info.value
+        )
       finally:
         os.chdir(original_dir)
 
@@ -384,7 +390,7 @@ class TestAliasedCommands:
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # Use alias instead of canonical name
-      config_file.write_text('[c]\nverbose = true\n')
+      config_file.write_text("[c]\nverbose = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -419,13 +425,13 @@ class TestAliasedCommands:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('''
+      config_file.write_text("""
 [check]
 verbose = false
 
 [c]
 verbose = true
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -460,12 +466,12 @@ class TestOverlappingFieldNames:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('''
+      config_file.write_text("""
 verbose = true
 
 [print]
 verbose = false
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -501,12 +507,12 @@ verbose = false
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # Root has 'verbose', but [print] doesn't
-      config_file.write_text('''
+      config_file.write_text("""
 verbose = true
 
 [print]
 # verbose not specified here
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -579,7 +585,7 @@ class TestSettingCmdAfterDecoration:
     # Should this work?
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\nverbose = true\n')
+      config_file.write_text("[print]\nverbose = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -664,7 +670,7 @@ class TestConfigWithRequiredFields:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\n')  # Missing 'output'
+      config_file.write_text("[print]\n")  # Missing 'output'
 
       original_dir = os.getcwd()
       try:
@@ -707,13 +713,13 @@ class TestTOMLWithNestedSection:
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # Nested section within command section
-      config_file.write_text('''
+      config_file.write_text("""
 [print]
 verbose = true
 
 [print.format]
 type = "html"
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -750,7 +756,7 @@ class TestMultipleGetConfigCalls:
     # First config file
     with tempfile.TemporaryDirectory() as tmpdir1:
       config_file1 = Path(tmpdir1) / "test1.toml"
-      config_file1.write_text('[print]\nverbose = true\n')
+      config_file1.write_text("[print]\nverbose = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -773,7 +779,7 @@ class TestMultipleGetConfigCalls:
     # Second config file
     with tempfile.TemporaryDirectory() as tmpdir2:
       config_file2 = Path(tmpdir2) / "test2.toml"
-      config_file2.write_text('[print]\nverbose = false\n')
+      config_file2.write_text("[print]\nverbose = false\n")
 
       original_dir = os.getcwd()
       try:
@@ -807,10 +813,10 @@ class TestUserAndProjectConfigSameSection:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       project_config = Path(tmpdir) / "test.toml"
-      project_config.write_text('[print]\nverbose = false\n')
+      project_config.write_text("[print]\nverbose = false\n")
 
       user_config = Path.home() / ".test.toml"
-      user_config.write_text('[print]\nverbose = true\n')
+      user_config.write_text("[print]\nverbose = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -845,7 +851,7 @@ class TestUserAndProjectConfigSameSection:
       verbose: bool = False
 
     user_config = Path.home() / ".test.toml"
-    user_config.write_text('[print]\nverbose = true\n')
+    user_config.write_text("[print]\nverbose = true\n")
 
     try:
       with tempfile.TemporaryDirectory() as tmpdir:
@@ -930,14 +936,14 @@ class TestExtractionTypeHandling:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('''
+      config_file.write_text("""
 [app]
 name = "myapp"
 
 [app.database]
 host = "db.example.com"
 port = 3306
-''')
+""")
 
       original_dir = os.getcwd()
       try:
@@ -971,12 +977,12 @@ port = 3306
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('''
+      config_file.write_text("""
 [print]
 enabled = false
 count = 42
 name = "custom"
-''')
+""")
 
       original_dir = os.getcwd()
       try:

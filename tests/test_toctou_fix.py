@@ -235,4 +235,3 @@ class TestToctouFix:
       finally:
         os.chdir(original_dir)
         user_config.unlink()
-

@@ -683,4 +683,3 @@ class TestSharedParser:
     # Now it should be configured
     assert factory._configured
     assert config.name == "default"
-

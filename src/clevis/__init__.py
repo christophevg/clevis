@@ -227,6 +227,7 @@ class Factory:
     cmd: Optional subcommand name for CLI applications with multiple commands.
     help: Optional help text for the subcommand (used with cmd parameter).
     aliases: Optional list of aliases for the subcommand (used with cmd parameter).
+    config: Optional TOML extraction key (defaults to cmd if not set).
   """
 
   config_class: type
@@ -235,6 +236,7 @@ class Factory:
   cmd: str | None = None
   help: str | None = None
   aliases: list[str] | None = None
+  config: str | None = None
   sub_parser: Parser | None = field(init=False, default=None)
 
   _configured: bool = False
@@ -364,6 +366,7 @@ def configclass(
   cmd: str | None = None,
   help: str | None = None,
   aliases: list[str] | None = None,
+  config: str | None = None,
 ) -> type[T] | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
@@ -390,11 +393,18 @@ def configclass(
     class CheckConfig:
       verbose: bool = False
 
+  For config extraction without CLI subcommand::
+
+    @configclass(config="output")
+    class OutputConfig:
+      rich: bool = False
+
   Args:
     cls: The class to decorate.
     cmd: Optional subcommand name for CLI applications with multiple commands.
     help: Optional help text for the subcommand (used with cmd parameter).
     aliases: Optional list of aliases for the subcommand (used with cmd parameter).
+    config: Optional TOML extraction key (defaults to cmd if not set).
 
   Returns:
     The decorated class (now a dataclass).
@@ -421,9 +431,11 @@ def configclass(
       factory.help = help
     if aliases is not None:
       factory.aliases = aliases
+    if config is not None:
+      factory.config = config
     return clz
 
-  if cls and not cmd and help is None and aliases is None:
+  if cls and not cmd and help is None and aliases is None and config is None:
     return decorator(cls)
   else:
     return lambda clz: decorator(clz)
@@ -768,12 +780,13 @@ def get_config(
         pass
 
   # Extract subcommand section from TOML config if applicable
-  # When @configclass(cmd="print") is used, TOML config like [print]\nrich = true
-  # should be extracted to root level before from_dict
+  # When @configclass(cmd="print") or @configclass(config="print") is used,
+  # TOML config like [print]\nrich = true should be extracted to root level before from_dict
   factory = get_factory(clz)
-  if factory.cmd and factory.cmd in cfg:
+  toml_key = factory.config or factory.cmd
+  if toml_key and toml_key in cfg:
     # Extract the command section and merge to root level
-    cmd_cfg = cfg.pop(factory.cmd)
+    cmd_cfg = cfg.pop(toml_key)
     if isinstance(cmd_cfg, dict):
       # Clear cfg to prevent root fields from leaking into subcommand config
       cfg.clear()
@@ -781,10 +794,10 @@ def get_config(
     else:
       raise ConfigError(
         message=(
-          f"Configuration section '{factory.cmd}' must be a table "
-          f"(e.g., [{factory.cmd}]), got {type(cmd_cfg).__name__}"
+          f"Configuration section '{toml_key}' must be a table "
+          f"(e.g., [{toml_key}]), got {type(cmd_cfg).__name__}"
         ),
-        field_path=factory.cmd,
+        field_path=toml_key,
         config_name=name,
         suggest_cli=cli,
       )

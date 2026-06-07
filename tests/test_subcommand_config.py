@@ -29,7 +29,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\nrich = true\n')
+      config_file.write_text("[print]\nrich = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -59,7 +59,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\nrich = false\n')
+      config_file.write_text("[print]\nrich = false\n")
 
       original_dir = os.getcwd()
       try:
@@ -91,7 +91,7 @@ class TestSubcommandConfig:
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # Write a different section, not [print]
-      config_file.write_text('[other]\nvalue = 42\n')
+      config_file.write_text("[other]\nvalue = 42\n")
 
       original_dir = os.getcwd()
       try:
@@ -210,7 +210,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\nrich = true\n')
+      config_file.write_text("[print]\nrich = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -283,9 +283,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text(
-        '[print]\nrich = true\n[check]\nverbose = true\n'
-      )
+      config_file.write_text("[print]\nrich = true\n[check]\nverbose = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -338,6 +336,7 @@ class TestSubcommandConfig:
 
     # Register GlobalConfig with its own parser (no subcommand)
     from clevis import Factory
+
     factory_global = Factory(GlobalConfig, parser=global_parser)
 
     @configclass(cmd="print")
@@ -350,9 +349,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text(
-        'app_name = "global_app"\n[print]\nrich = true\n'
-      )
+      config_file.write_text('app_name = "global_app"\n[print]\nrich = true\n')
 
       original_dir = os.getcwd()
       try:
@@ -398,7 +395,7 @@ class TestSubcommandConfig:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('[print]\nrich = true\n')
+      config_file.write_text("[print]\nrich = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -430,7 +427,7 @@ class TestSubcommandConfig:
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
       # TOML has rich=false
-      config_file.write_text('[print]\nrich = false\n')
+      config_file.write_text("[print]\nrich = false\n")
 
       original_dir = os.getcwd()
       try:
