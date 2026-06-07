@@ -21,9 +21,9 @@ from collections.abc import Callable
 from dataclasses import Field, dataclass, field, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Protocol, TypedDict, TypeVar, get_args
+from typing import Any, Literal, Protocol, TypedDict, TypeVar, Union, get_args, get_origin
 
-from dacite import from_dict
+from dacite import Config, from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
 
 __version__ = "0.3.2"
@@ -629,6 +629,8 @@ def unpack_type(type_def: type) -> type:
   Given a type, if a union type, return the not-None type (dataclass).
 
   For Optional[T] or T | None, returns T.
+  For container types (list, dict, set, tuple), returns as-is.
+  For Literal types, returns as-is.
   For non-union types, returns the type as-is.
 
   Args:
@@ -640,13 +642,30 @@ def unpack_type(type_def: type) -> type:
   Raises:
       ValueError: If union has more than 2 types (not supported yet)
   """
-  types = get_args(type_def)
-  # not a union type
-  if len(types) == 0:
+  from types import UnionType
+
+  origin = get_origin(type_def)
+
+  # Handle container types (list, dict, set, tuple) - return as-is
+  if origin in (list, dict, set, tuple):
     return type_def
+
+  # Handle Literal types - return as-is (dacite validates)
+  if origin is Literal:
+    return type_def
+
+  # Handle Union types (Optional[T] / T | None)
+  # Not a union type - return as-is
+  if origin is not Union and origin is not UnionType:
+    return type_def
+
+  types = get_args(type_def)
   # <type> | None is only supported combination
+  if len(types) == 0:
+    return type_def  # Not a generic/union
   if len(types) > 2:
     raise ValueError("Complex unions not supported")
+  # T | None or None | T
   return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
 
 
@@ -807,8 +826,9 @@ def get_config(
     apply_to_dict(get_factory(clz).get_args(args), cfg)
 
   # Convert dict to dataclass
+  # Use cast=[tuple, set] to convert TOML lists to tuples and sets
   try:
-    return from_dict(data_class=clz, data=cfg)
+    return from_dict(data_class=clz, data=cfg, config=Config(cast=[tuple, set]))
   except MissingValueError as e:
     # Extract field path from dacite error message
     # Format: 'missing value for field "database.host"'
