@@ -244,9 +244,17 @@ class Factory:
     Configure the parser with arguments for this config class.
 
     Called automatically on first get_config() - usually not called directly.
+
+    Raises:
+      ValueError: If both cmd and prefix are set (mutually exclusive).
     """
     if self._configured:
       return
+
+    # Validate that cmd and prefix are not both set
+    if self.cmd and self.prefix:
+      raise ValueError("Cannot set both 'cmd' and 'prefix' on the same config class")
+
     if self.cmd:
       # Build kwargs for add_parser with optional help and aliases
       add_parser_kwargs: dict[str, Any] = {}
@@ -759,6 +767,28 @@ def get_config(
         # fd is closed by _load_toml_from_fd via file object
         pass
 
+  # Extract subcommand section from TOML config if applicable
+  # When @configclass(cmd="print") is used, TOML config like [print]\nrich = true
+  # should be extracted to root level before from_dict
+  factory = get_factory(clz)
+  if factory.cmd and factory.cmd in cfg:
+    # Extract the command section and merge to root level
+    cmd_cfg = cfg.pop(factory.cmd)
+    if isinstance(cmd_cfg, dict):
+      # Clear cfg to prevent root fields from leaking into subcommand config
+      cfg.clear()
+      cfg.update(cmd_cfg)
+    else:
+      raise ConfigError(
+        message=(
+          f"Configuration section '{factory.cmd}' must be a table "
+          f"(e.g., [{factory.cmd}]), got {type(cmd_cfg).__name__}"
+        ),
+        field_path=factory.cmd,
+        config_name=name,
+        suggest_cli=cli,
+      )
+
   # Parse CLI args if requested and merge them into the config
   if cli or args is not None:
     apply_to_dict(get_factory(clz).get_args(args), cfg)
@@ -852,4 +882,3 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
-
