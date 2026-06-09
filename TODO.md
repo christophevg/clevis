@@ -4,6 +4,60 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 ## Backlog
 
+### Phase 2: Dynamic Field Registration (P2 - High)
+
+Plugin configuration support for architectures like Yoker.
+
+- [ ] **P2-007: Implement dynamic field registration**
+  - Add `register_field(parent, name, field_type, default_factory)` function
+  - Support adding fields to non-frozen dataclasses at runtime
+  - Derive TOML namespace from parent hierarchy (no explicit namespace param)
+  - Generate CLI args for registered fields (`--parent-name-field`)
+  - Handle error cases: frozen parent, duplicate field, late registration
+  - **Satisfies**: R100-R106 (new requirements to be added)
+  - **Acceptance**:
+    - `register_field(ToolsConfig, "pkgq", PkgqToolConfig)` adds field
+    - TOML `[tools.pkgq]` loads into `config.tools.pkgq`
+    - CLI `--tools-pkgq-enabled` sets value
+    - `TypeError` raised for frozen parent
+    - `ValueError` raised for duplicate field name
+    - `RuntimeError` raised if called after `get_config()`
+  - **Reference**: `analysis/dynamic-registration.md`
+
+- [ ] **P2-008: Update @configclass decorator**
+  - Add validation: `config` parameter requires `cmd` parameter
+  - Raise clear error if `config` used without `cmd`
+  - Document `config` parameter is for TOML section override with subcommands
+  - **Satisfies**: R107 (new requirement)
+  - **Acceptance**:
+    - `@configclass(cmd="cli", config="client")` works
+    - `@configclass(config="output")` raises error with message
+  - **Reference**: `analysis/dynamic-registration.md`
+
+- [ ] **P2-009: Add comprehensive documentation and examples**
+  - Update `PACKAGE.md` with all 6 use cases
+  - Add `examples/plugin.py` demonstrating dynamic registration
+  - Add `examples/subcommands.py` demonstrating subcommands with TOML override
+  - Update `README.md` with plugin configuration section
+  - **Satisfies**: R108 (new requirement)
+  - **Acceptance**:
+    - All 6 use cases documented with code examples
+    - Plugin example runs successfully
+    - README includes plugin configuration guide
+  - **Reference**: `analysis/dynamic-registration.md`
+
+- [ ] **P2-010: Add tests for dynamic field registration**
+  - Test `register_field()` basic functionality
+  - Test error cases (frozen parent, duplicate, late registration)
+  - Test TOML loading for registered fields
+  - Test CLI arg generation for registered fields
+  - Test backward compatibility with existing patterns
+  - **Satisfies**: R109 (new requirement)
+  - **Acceptance**:
+    - All tests pass
+    - Coverage for new code ≥90%
+    - Existing tests continue to pass
+
 ### Phase 3: Polish (P3 - Medium)
 
 Optional improvements for future releases.
