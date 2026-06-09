@@ -6,7 +6,7 @@ into an existing application config at runtime.
 
 from dataclasses import dataclass, field
 
-from clevis import get_config, register_field
+from clevis import SecurityAction, get_config, register_field
 
 
 # Plugin module defines its configuration
@@ -45,12 +45,14 @@ register_field(ToolsConfig, "pkgq", PkgqToolConfig)
 tools_config = get_config(
   ToolsConfig,
   name="tools",
-  security={"file_permissions": "log", "directory_permissions": "log"},
+  security={"file_permissions": SecurityAction.LOG, "directory_permissions": SecurityAction.LOG},
 )
 
 if __name__ == "__main__":
   print("List tool config:", tools_config.list)
   print("Pkgq tool config:", tools_config.pkgq)
+
+  print("ToolsConfig:", get_config(ToolsConfig, name="tools"))
 
 """
 

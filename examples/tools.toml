@@ -1,0 +1,7 @@
+[list]
+enabled = false
+format = "txt"
+
+[pkgq]
+active = false
+timeout = 0
