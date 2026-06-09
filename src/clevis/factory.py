@@ -129,7 +129,8 @@ def _ensure_configured(parser: Parser) -> Parser:
   global _configured_parsers
   if parser not in _configured_parsers:
     # lazy configure using each factory having this parser
-    for factory in _factories.values():
+    # Convert to list to avoid RuntimeError if factories dict changes during iteration
+    for factory in list(_factories.values()):
       if factory.parser is parser:
         factory.configure_parser()
     _configured_parsers.append(parser)
@@ -178,6 +179,7 @@ class Factory:
     help: Optional help text for the subcommand (used with cmd parameter).
     aliases: Optional list of aliases for the subcommand (used with cmd parameter).
     config: Optional TOML extraction key (defaults to cmd if not set).
+    _nested_prefix: Tracks the nesting level in config hierarchy (internal).
   """
 
   config_class: type
@@ -188,6 +190,7 @@ class Factory:
   aliases: list[str] | None = None
   config: str | None = None
   sub_parser: Parser | None = field(init=False, default=None)
+  _nested_prefix: str | None = field(init=False, default=None)
 
   _configured: bool = False
 
@@ -208,6 +211,13 @@ class Factory:
     if self.cmd and self.prefix:
       raise ValueError("Cannot set both 'cmd' and 'prefix' on the same config class")
 
+    # Initialize nested_prefix from prefix if set
+    if self.prefix:
+      self._nested_prefix = self.prefix
+
+    # For subcommands, nested_prefix is None (new root context)
+    # For top-level (no cmd, no prefix), nested_prefix is None
+
     if self.cmd:
       # Build kwargs for add_parser with optional help and aliases
       add_parser_kwargs: dict[str, Any] = {}
@@ -225,34 +235,89 @@ class Factory:
     if target_parser not in _registered_field_owners:
       _registered_field_owners[target_parser] = set()
 
-    for f, path, owner_class in self.list_fields_with_owners():
-      # Check if this field has already been registered
-      # A field is identified by (owner_class, field_name) tuple
-      field_key = (owner_class, f.name)
-      if field_key in _registered_field_owners[target_parser]:
-        continue
+    # Configure fields with nested prefix tracking
+    self._configure_fields(self.config_class, [], self._nested_prefix, target_parser, set())
 
-      # Mark this field as registered
-      _registered_field_owners[target_parser].add(field_key)
+  def _configure_fields(
+    self,
+    clz: type,
+    path: list[str],
+    parent_prefix: str | None,
+    target_parser: Parser,
+    visited: set[type],
+  ) -> None:
+    """
+    Recursively configure fields for nested dataclasses.
 
-      name = ".".join(path + [f.name])  # concat intermediate classes with "."
-      cli_name = name.replace(".", "-").replace("_", "-")
-      if self.prefix:
-        cli_name = f"{self.prefix}-{cli_name}"
-        name = f"{self.prefix}.{name}"
-      arg = functools.partial(
-        target_parser.add_argument,
-        f"--{cli_name}",
-        dest=name,  # name with dots
-        default=None,  # Use None so TOML values aren't overridden
-        help=f"provide {name}",
-      )
-      # complete partial: boolean switch of store value
+    Args:
+      clz: The dataclass to configure
+      path: Current path in the hierarchy (field names)
+      parent_prefix: The nested prefix from parent config (if any)
+      target_parser: The parser to add arguments to
+      visited: Set of config classes already visited in this hierarchy
+    """
+    for f in fields(clz):
       concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
-      if concrete_type is bool:
-        _ = arg(action="store_true")
+
+      if is_dataclass(concrete_type):
+        # Build nested prefix for this field
+        # path contains the path from the current config class to this field
+        # parent_prefix is the full prefix from the root to this point
+        if parent_prefix:
+          nested_prefix = f"{parent_prefix}.{f.name}"
+        else:
+          nested_prefix = f.name
+
+        # Check for duplicate config class in hierarchy
+        if concrete_type in visited:
+          raise ValueError(
+            f"Duplicate config class {concrete_type.__name__} in hierarchy. "
+            f"Config class appears multiple times in the same hierarchy. "
+            f"Create distinct subclasses to resolve this."
+          )
+
+        # Set nested_prefix on the nested config's factory
+        factory = get_factory(concrete_type)
+        factory._nested_prefix = nested_prefix
+
+        # Mark as visited for duplicate detection
+        visited.add(concrete_type)
+
+        # Recurse into nested dataclass
+        self._configure_fields(
+          concrete_type, path + [f.name], nested_prefix, target_parser, visited
+        )
       else:
-        _ = arg(type=concrete_type)
+        # Leaf field - add argument
+        # Check if this field has already been registered
+        field_key = (clz, f.name)
+        if field_key in _registered_field_owners[target_parser]:
+          continue
+
+        # Mark this field as registered
+        _registered_field_owners[target_parser].add(field_key)
+
+        # Build the argument name
+        name = ".".join(path + [f.name])
+        cli_name = name.replace(".", "-").replace("_", "-")
+
+        # Apply nested prefix if set
+        if self._nested_prefix:
+          cli_name = f"{self._nested_prefix}-{cli_name}"
+          name = f"{self._nested_prefix}.{name}"
+
+        arg = functools.partial(
+          target_parser.add_argument,
+          f"--{cli_name}",
+          dest=name,  # name with dots
+          default=None,  # Use None so TOML values aren't overridden
+          help=f"provide {name}",
+        )
+        # complete partial: boolean switch of store value
+        if concrete_type is bool:
+          _ = arg(action="store_true")
+        else:
+          _ = arg(type=concrete_type)
 
   def get_args(self, args: list[str] | None = None) -> dict[str, Any]:
     """
@@ -263,14 +328,13 @@ class Factory:
 
     Returns:
       Dictionary with dotted keys (e.g., {"database.host": "localhost"}).
-      If prefix is set, keys are stripped of the prefix.
+      If _nested_prefix is set, keys are stripped of the prefix.
     """
     args_dict = vars(_ensure_configured(self.parser).parse_args(args))
-    if self.prefix:
-      args_dict = {
-        key[len(self.prefix) + 1 :]: value
-        for key, value in args_dict.items()
-        if key.startswith(self.prefix)
+    if self._nested_prefix:
+      prefix = self._nested_prefix + "."
+      return {
+        key[len(prefix) :]: value for key, value in args_dict.items() if key.startswith(prefix)
       }
     return args_dict
 
