@@ -1,0 +1,32 @@
+# Environment variable interpolation example
+#
+# This TOML file demonstrates environment variable interpolation
+# with the envtoml parser (installed with: pip install clevis[envtoml])
+#
+# Syntax: ${VAR} - Environment variable expansion
+#
+# Note: The ${VAR|default} syntax shown in some TOML parser documentation
+# is NOT supported by the current clevis implementation. Use dataclass
+# defaults for optional values instead.
+
+[database]
+# Database host - required environment variable
+host = "${DB_HOST}"
+
+# Database port - required environment variable
+# Clevis will convert string "5432" to int automatically
+port = "${DB_PORT}"
+
+# Connection URL combining multiple env vars
+# Both DB_HOST and DB_PORT must be set
+url = "${DB_HOST}:${DB_PORT}"
+
+# API key - required, must be set via environment
+api_key = "${API_KEY}"
+
+[app]
+# Static value (no interpolation)
+name = "MyApp"
+
+# Environment name - required environment variable
+environment = "${ENV}"
