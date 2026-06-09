@@ -8,14 +8,7 @@ from dataclasses import dataclass, field
 
 from clevis import SecurityAction, configclass, get_config, register_field
 
-# Plugin module defines its configuration
-@dataclass
-class PkgqToolConfig:
-  """Plugin tool configuration for package queries."""
-
-  active: bool = True
-  timeout: int = 30
-
+# A Module provides a plugin system for tools:
 
 # Built-in tool configuration
 @dataclass
@@ -25,7 +18,6 @@ class ListToolConfig:
   enabled: bool = True
   format: str = "table"
 
-
 # Application defines its ToolsConfig (non-frozen for plugin registration)
 @dataclass  # NOT frozen - allows dynamic registration
 class ToolsConfig:
@@ -33,10 +25,20 @@ class ToolsConfig:
 
   list: ListToolConfig = field(default_factory=ListToolConfig)
 
-
 @configclass
 class ModuleConfig:
   tools : ToolsConfig = field(default_factory=ToolsConfig)
+
+# A Plugin module uses the Module and registers its tool
+
+# Plugin module defines its configuration
+@dataclass
+class PkgqToolConfig:
+  """Plugin tool configuration for package queries."""
+
+  active: bool = True
+  timeout: int = 30
+
 
 # Plugin registers itself into ToolsConfig
 # This adds ToolsConfig.pkgq field automatically
@@ -88,3 +90,4 @@ List tool config: ListToolConfig(enabled=True, format='table')
 Pkgq tool config: PkgqToolConfig(active=True, timeout=45)
 
 """
+
