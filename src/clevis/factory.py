@@ -113,6 +113,12 @@ def unpack_type(type_def: type) -> type:
 # keeps track if parser is configured
 _configured_parsers: list[Parser] = []
 
+# Track which field owner classes have had their CLI args registered for each parser
+# Key: parser, Value: set of (owner_class, field_name) tuples
+# This prevents the same field from being registered twice
+# (e.g., as --list-enabled and --tools-list-enabled)
+_registered_field_owners: dict[Parser, set[tuple[type, str]]] = {}
+
 
 def _ensure_configured(parser: Parser) -> Parser:
   """
@@ -194,6 +200,7 @@ class Factory:
     Raises:
       ValueError: If both cmd and prefix are set (mutually exclusive).
     """
+    global _registered_field_owners
     if self._configured:
       return
 
@@ -210,15 +217,31 @@ class Factory:
         add_parser_kwargs["aliases"] = self.aliases
       self.sub_parser = get_sub_parser(self.parser).add_parser(self.cmd, **add_parser_kwargs)
     self._configured = True
-    for f, path in self.list_fields():
+
+    # Get the target parser
+    target_parser = self.sub_parser if self.sub_parser else self.parser
+
+    # Initialize tracking for this parser if needed
+    if target_parser not in _registered_field_owners:
+      _registered_field_owners[target_parser] = set()
+
+    for f, path, owner_class in self.list_fields_with_owners():
+      # Check if this field has already been registered
+      # A field is identified by (owner_class, field_name) tuple
+      field_key = (owner_class, f.name)
+      if field_key in _registered_field_owners[target_parser]:
+        continue
+
+      # Mark this field as registered
+      _registered_field_owners[target_parser].add(field_key)
+
       name = ".".join(path + [f.name])  # concat intermediate classes with "."
       cli_name = name.replace(".", "-").replace("_", "-")
       if self.prefix:
         cli_name = f"{self.prefix}-{cli_name}"
         name = f"{self.prefix}.{name}"
-      parser = self.sub_parser if self.sub_parser else self.parser
       arg = functools.partial(
-        parser.add_argument,
+        target_parser.add_argument,
         f"--{cli_name}",
         dest=name,  # name with dots
         default=None,  # Use None so TOML values aren't overridden
@@ -275,6 +298,31 @@ class Factory:
         result.append((f, path))
     return result
 
+  def list_fields_with_owners(
+    self, clz: type | None = None, path: list[str] | None = None
+  ) -> list[tuple[Field[Any], list[str], type]]:
+    """
+    Recursively list all fields in nested dataclasses with owner class info.
+
+    Args:
+      clz: The dataclass to inspect (defaults to self.config_class)
+      path: Current path in the hierarchy (used for recursion)
+
+    Returns:
+      List of (field, path, owner_class) tuples for each leaf field.
+      owner_class is the dataclass that directly owns the field.
+    """
+    clz = self.config_class if clz is None else clz
+    path = [] if path is None else path
+    result = []
+    for f in fields(clz):
+      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+      if is_dataclass(concrete_type):
+        result.extend(self.list_fields_with_owners(concrete_type, path=path + [f.name]))
+      else:
+        result.append((f, path, clz))
+    return result
+
 
 # factories for configurations
 _factories: dict[type, Factory] = {}
@@ -287,12 +335,13 @@ def _reset_factories() -> None:
   For testing only - ensures test isolation by resetting global state.
   Creates a fresh default parser.
   """
-  global _factories, _configured_parsers, _default_parser, _sub_parsers
+  global _factories, _configured_parsers, _default_parser, _sub_parsers, _registered_field_owners
   # Clear dictionaries/lists in-place instead of reassigning
   # This ensures all module references see the changes
   _factories.clear()
   _configured_parsers.clear()
   _sub_parsers.clear()
+  _registered_field_owners.clear()
   # Create a new parser by reassigning (this is unavoidable for parser objects)
   _default_parser = argparse.ArgumentParser()
 
