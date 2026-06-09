@@ -6,8 +6,7 @@ into an existing application config at runtime.
 
 from dataclasses import dataclass, field
 
-from clevis import SecurityAction, get_config, register_field
-
+from clevis import SecurityAction, configclass, get_config, register_field
 
 # Plugin module defines its configuration
 @dataclass
@@ -34,6 +33,10 @@ class ToolsConfig:
 
   list: ListToolConfig = field(default_factory=ListToolConfig)
 
+@configclass
+class ModuleConfig:
+  tools : ToolsConfig = field(default_factory=ToolsConfig)
+
 
 # Plugin registers itself into ToolsConfig
 # This adds ToolsConfig.pkgq field automatically
@@ -42,17 +45,18 @@ register_field(ToolsConfig, "pkgq", PkgqToolConfig)
 # Application uses the extended config
 # TOML: [tools.list] and [tools.pkgq] work seamlessly
 # CLI: --list-enabled and --pkgq-timeout work
-tools_config = get_config(
-  ToolsConfig,
-  name="tools",
-  security={"file_permissions": SecurityAction.LOG, "directory_permissions": SecurityAction.LOG},
-)
+# tools_config = get_config(
+#   ToolsConfig,
+#   name="tools",
+#   security={"file_permissions": SecurityAction.LOG, "directory_permissions": SecurityAction.LOG},
+# )
 
 if __name__ == "__main__":
-  print("List tool config:", tools_config.list)
-  print("Pkgq tool config:", tools_config.pkgq)
+  print("ModuleConfig:", get_config(ModuleConfig, name="tools"))
 
-  print("ToolsConfig:", get_config(ToolsConfig, name="tools"))
+  # print("List tool config:", tools_config.list)
+  # print("Pkgq tool config:", tools_config.pkgq)
+
 
 """
 

@@ -33,6 +33,7 @@ from clevis.factory import (
   _reset_factories,
   apply_to_dict,
   get_factory,
+  has_factory,
   unpack_type,
 )
 from clevis.registration import register_field
@@ -530,6 +531,7 @@ __all__ = [
   "SecurityConfig",
   "SecurityError",
   "get_factory",
+  "has_factory",
   "configclass",
   "register_field",
   "get_config",
