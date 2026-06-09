@@ -72,6 +72,21 @@ The Factory pattern enables three use cases:
 - [ ] R42: Configuration file permission validation (group/other readable)
 - [ ] R43: Parent directory security validation (world-writable)
 
+### Dynamic Field Registration (P2-007, issues #10 and #11)
+
+Enable plugin architectures to inject configuration fields at runtime.
+
+- [ ] R100: `register_field(parent, name, field_type)` adds field to parent dataclass
+- [ ] R101: Registered fields derive TOML namespace from parent hierarchy automatically
+- [ ] R102: Registered fields generate CLI args with dotted path (`--parent-name-field`)
+- [ ] R103: `register_field()` raises `TypeError` for frozen parent dataclass
+- [ ] R104: `register_field()` raises `ValueError` for duplicate field name
+- [ ] R105: `register_field()` raises `RuntimeError` if called after `get_config()`
+- [ ] R106: Parent must be non-frozen dataclass to accept dynamic fields
+- [ ] R107: `@configclass(config=...)` requires `cmd` parameter (validation)
+- [ ] R108: Documentation covers all 6 use cases with examples
+- [ ] R109: Tests cover dynamic registration, error cases, backward compatibility
+
 ## Non-Functional Requirements
 
 ### Code Quality
