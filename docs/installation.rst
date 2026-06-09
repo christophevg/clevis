@@ -56,7 +56,7 @@ Example TOML:
 
 .. note::
 
-   If the environment variable is not set, this will raise an error.
+   If the environment variable is not set, this will raise an error when loading.
 
 tomlev
 ~~~~~~
@@ -74,6 +74,7 @@ Example TOML:
    [database]
    password = "${DB_PASSWORD}"
    host = "${DB_HOST|localhost}"
+   port = "${DB_PORT|5432}"
 
 .. note::
 
@@ -104,6 +105,19 @@ If multiple extras are installed, Clevis selects parsers in this order:
 3. **tomli** - Pure Python fallback
 4. **tomllib** - Stdlib (Python 3.11+)
 
+Combining Extras
+----------------
+
+You can install multiple extras at once:
+
+.. code-block:: bash
+
+   # Development with all extras
+   pip install clevis[envtoml,dev]
+
+   # Or for development from source
+   pip install -e .[envtoml,dev]
+
 Development Installation
 ------------------------
 
@@ -116,6 +130,17 @@ To contribute to Clevis or run tests locally:
    make env-dev
 
 This creates a development environment with all dependencies including test tools.
+
+Development Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The development installation includes:
+
+- **Testing**: ``pytest``, ``pytest-cov``, ``coverage``
+- **Type checking**: ``mypy``
+- **Linting**: ``ruff``
+- **Documentation**: ``sphinx``, ``sphinx-rtd-theme``
+- **All TOML parsers**: For testing across all backends
 
 Running Tests
 ~~~~~~~~~~~~~
@@ -130,6 +155,12 @@ Running Tests
 
    # Run tests on all Python versions
    make test-all
+
+   # Run specific test file
+   make test TEST=tests/test_config.py
+
+   # Run specific test function
+   make test TEST=tests/test_config.py::test_basic_config
 
 Verifying Installation
 ----------------------
@@ -147,6 +178,23 @@ To verify your installation:
 
    config = get_config(Config, name="test")
    print(config.name)  # Output: Test
+
+Check TOML Parser
+~~~~~~~~~~~~~~~~~
+
+To check which TOML parser is being used:
+
+.. code-block:: python
+
+   from clevis import _get_toml_parser
+
+   parser = _get_toml_parser()
+   print(f"Using parser: {parser.__module__}")
+
+   # Output examples:
+   # Using parser: tomllib (Python 3.11+)
+   # Using parser: tomli (Python 3.10)
+   # Using parser: envtoml (with env var support)
 
 Troubleshooting
 ---------------
@@ -187,3 +235,78 @@ the correct extra:
 
    pip install clevis[envtoml]    # For ${VAR} syntax
    pip install clevis[tomlev]     # For ${VAR|default} syntax
+
+Security Permission Errors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you see ``SecurityError`` about file permissions:
+
+.. code-block:: text
+
+   SecurityError: Configuration file ~/.myapp.toml is readable by group/other.
+
+Fix the permissions:
+
+.. code-block:: bash
+
+   # Secure: owner read/write only
+   chmod 600 ~/.myapp.toml
+
+   # Or skip security checks for development
+   # In your code:
+   # get_config(Config, security={"file_permissions": SecurityAction.DONT_CHECK})
+
+Development Container Issues
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If running in a container with different user/group IDs:
+
+.. code-block:: python
+
+   from clevis import get_config, SecurityAction
+
+   # Skip security checks in containers
+   config = get_config(
+       Config,
+       security={
+           "file_permissions": SecurityAction.DONT_CHECK,
+           "directory_permissions": SecurityAction.DONT_CHECK
+       }
+   )
+
+Upgrading
+---------
+
+To upgrade to the latest version:
+
+.. code-block:: bash
+
+   pip install --upgrade clevis
+
+   # Or with extras
+   pip install --upgrade clevis[envtoml]
+
+Check the `changelog <https://github.com/christophevg/clevis/blob/master/HISTORY.md>`_
+for release notes and breaking changes.
+
+Version Compatibility
+---------------------
+
+Clevis follows semantic versioning:
+
+- **Major version (X.0.0)**: Breaking changes
+- **Minor version (0.X.0)**: New features, backward compatible
+- **Patch version (0.0.X)**: Bug fixes, backward compatible
+
+**Supported Python versions:**
+
+- Python 3.10: Supported with ``tomli`` extra
+- Python 3.11+: Full support with stdlib ``tomllib``
+- Python 3.12+: Tested and supported
+
+**Dependency versions:**
+
+- ``dacite`` >= 1.8.0
+- ``tomli`` >= 2.0.0 (Python 3.10)
+- ``envtoml`` >= 1.0.0 (optional)
+- ``tomlev`` >= 1.0.0 (optional)

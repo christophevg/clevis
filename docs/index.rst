@@ -21,6 +21,7 @@ and runtime overrides all pivot around a single dataclass schema.
    :maxdepth: 2
 
    installation
+   examples
    usage
    api
 

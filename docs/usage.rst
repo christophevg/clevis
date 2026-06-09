@@ -1082,6 +1082,338 @@ Without this protection, an attacker could:
 The TOCTOU-safe implementation ensures that the file checked is the same file
 read, preventing this attack vector.
 
+Dynamic Field Registration (Plugin Architecture)
+-------------------------------------------------
+
+For plugin architectures where modules need to add their own configuration
+fields at runtime, use ``register_field()``:
+
+Basic Registration
+~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from dataclasses import dataclass, field
+   from clevis import register_field, get_config
+
+   # Parent config (must NOT be frozen)
+   @dataclass
+   class ToolsConfig:
+       """Container for tool configurations."""
+       list: str = "default"
+
+   # Plugin config
+   @dataclass
+   class PkgqToolConfig:
+       """Configuration for pkgq tool plugin."""
+       enabled: bool = True
+       cache_directory: str = "~/.cache/pkgq"
+       timeout: int = 30
+
+   # Register the plugin's config as a field
+   register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+   # Create an instance - the field is now available
+   config = ToolsConfig()
+   print(config.pkgq.enabled)  # True
+   print(config.pkgq.timeout)   # 30
+
+TOML Support
+~~~~~~~~~~~~
+
+Registered fields work seamlessly with TOML configuration:
+
+.. code-block:: toml
+
+   # tools.toml
+   list = "from-toml"
+
+   # Plugin configuration section
+   [tools.pkgq]
+   enabled = true
+   timeout = 45
+   cache_directory = "/custom/cache"
+
+.. code-block:: python
+
+   config = get_config(ToolsConfig, name="tools")
+   # config.pkgq.enabled = True (from TOML)
+   # config.pkgq.timeout = 45 (from TOML)
+
+CLI Argument Support
+~~~~~~~~~~~~~~~~~~~~~
+
+Registered fields automatically generate CLI arguments:
+
+.. code-block:: bash
+
+   # Arguments follow the hierarchy: parent-field-option
+   python app.py --tools-pkgq-enabled --tools-pkgq-timeout 60
+
+.. code-block:: python
+
+   config = get_config(
+       ToolsConfig,
+       name="tools",
+       args=["--tools-pkgq-enabled", "--tools-pkgq-timeout", "60"]
+   )
+   # config.pkgq.enabled = True (from CLI)
+   # config.pkgq.timeout = 60 (from CLI)
+
+Plugin Pattern Example
+~~~~~~~~~~~~~~~~~~~~~~
+
+A realistic plugin architecture:
+
+.. code-block:: python
+
+   # main_app.py - Main application
+   from dataclasses import dataclass, field
+   from clevis import get_config
+
+   @dataclass  # NOT frozen - allows dynamic registration
+   class ToolsConfig:
+       """Base tools configuration that plugins can extend."""
+       list: ListToolConfig = field(default_factory=ListToolConfig)
+
+   @dataclass
+   class AppConfig:
+       name: str = "myapp"
+       tools: ToolsConfig = field(default_factory=ToolsConfig)
+
+   # plugin_pkgq.py - Plugin module
+   from clevis import register_field
+
+   @dataclass
+   class PkgqToolConfig:
+       """Pkgq tool configuration."""
+       enabled: bool = True
+       cache_directory: str = "~/.cache/pkgq"
+       timeout: int = 30
+
+   # Plugin registers itself when imported
+   def register():
+       register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+   # application.py - Application startup
+   from main_app import AppConfig, ToolsConfig
+   from plugin_pkgq import register
+
+   # Load plugins before getting config
+   register()
+
+   # Now ToolsConfig has pkgq field
+   config = get_config(AppConfig, name="myapp")
+   print(config.tools.pkgq.timeout)  # 30 (default)
+
+Registration Rules
+~~~~~~~~~~~~~~~~~~
+
+**Important constraints:**
+
+1. **Parent must NOT be frozen**:
+
+   .. code-block:: python
+
+      # ❌ Wrong - frozen parent
+      @dataclass(frozen=True)
+      class FrozenConfig:
+          name: str = "default"
+
+      # Raises TypeError
+      register_field(FrozenConfig, "plugin", PluginConfig)
+
+      # ✓ Correct - mutable parent
+      @dataclass
+      class MutableConfig:
+          name: str = "default"
+
+      # Works fine
+      register_field(MutableConfig, "plugin", PluginConfig)
+
+2. **Register before get_config with CLI**:
+
+   .. code-block:: python
+
+      # ✓ Correct order
+      register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+      config = get_config(ToolsConfig, name="tools")
+
+      # ❌ Wrong order - raises RuntimeError
+      config = get_config(ToolsConfig, name="tools")
+      register_field(ToolsConfig, "pkgq", PkgqToolConfig)  # Too late!
+
+      # ✓ Works if CLI is disabled
+      register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+      config = get_config(ToolsConfig, name="tools", cli=False)
+
+3. **No duplicate field names**:
+
+   .. code-block:: python
+
+      register_field(Config, "plugin", PluginConfig)
+
+      # ❌ Raises ValueError - duplicate
+      register_field(Config, "plugin", OtherPluginConfig)
+
+      # ✓ Different names work
+      register_field(Config, "plugin1", PluginConfig)
+      register_field(Config, "plugin2", OtherPluginConfig)
+
+Error Handling
+~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from clevis import register_field
+   from dataclasses import dataclass
+
+   # Example 1: Frozen parent
+   @dataclass(frozen=True)
+   class FrozenConfig:
+       name: str = "default"
+
+   @dataclass
+   class PluginConfig:
+       enabled: bool = True
+
+   try:
+       register_field(FrozenConfig, "plugin", PluginConfig)
+   except TypeError as e:
+       print(f"Error: {e}")
+       # Error: Cannot add field to frozen dataclass
+
+   # Example 2: Duplicate field name
+   @dataclass
+   class Config:
+       existing: str = "value"
+
+   @dataclass
+   class NewConfig:
+       value: int = 10
+
+   register_field(Config, "new_field", NewConfig)
+
+   try:
+       register_field(Config, "new_field", NewConfig)  # Already registered
+   except ValueError as e:
+       print(f"Error: {e}")
+       # Error: Field 'new_field' already exists
+
+   # Example 3: Late registration after CLI
+   from clevis import get_config, _reset_factories
+
+   _reset_factories()
+
+   @dataclass
+   class Config:
+       name: str = "default"
+
+   @dataclass
+   class LatePlugin:
+       enabled: bool = True
+
+   # Load config with CLI - this configures the parser
+   config = get_config(Config, name="test", user=False, project=False, args=[])
+
+   try:
+       register_field(Config, "plugin", LatePlugin)
+   except RuntimeError as e:
+       print(f"Error: {e}")
+       # Error: Cannot register field after parser has been configured
+
+Complete Workflow Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Full example with plugins, TOML, and CLI:
+
+.. code-block:: python
+
+   from dataclasses import dataclass, field
+   from pathlib import Path
+   import tempfile
+   from clevis import register_field, get_config, SecurityAction
+
+   # Define configs
+   @dataclass
+   class ToolsConfig:
+       list: str = "default"
+
+   @dataclass
+   class PkgqToolConfig:
+       enabled: bool = True
+       timeout: int = 30
+       cache_directory: str = "~/.cache/pkgq"
+
+   @dataclass
+   class GitToolConfig:
+       enabled: bool = True
+       timeout: int = 60
+
+   @dataclass
+   class Config:
+       name: str = "myapp"
+       tools: ToolsConfig = field(default_factory=ToolsConfig)
+
+   # Register plugins
+   register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+   register_field(ToolsConfig, "git", GitToolConfig)
+
+   # Create TOML with plugin configuration
+   with tempfile.TemporaryDirectory() as tmpdir:
+       config_file = Path(tmpdir) / "app.toml"
+       config_file.write_text("""
+   name = "MyApp"
+
+   [tools]
+   list = "from-toml"
+
+   [tools.pkgq]
+   enabled = true
+   timeout = 45
+   cache_directory = "/custom/cache"
+
+   [tools.git]
+   enabled = false
+   timeout = 120
+   """)
+
+       import os
+       original_dir = os.getcwd()
+       try:
+           os.chdir(tmpdir)
+           # Load with TOML + CLI override
+           config = get_config(
+               Config,
+               name="app",
+               user=False,
+               project=True,
+               cli=True,
+               args=["--tools-pkgq-timeout", "90"],  # CLI overrides TOML
+               security={
+                   "file_permissions": SecurityAction.DONT_CHECK,
+                   "directory_permissions": SecurityAction.DONT_CHECK,
+               },
+           )
+
+           print(f"name: {config.name}")  # MyApp (from TOML)
+           print(f"tools.list: {config.tools.list}")  # from-toml (from TOML)
+           print(f"tools.pkgq.enabled: {config.tools.pkgq.enabled}")  # True (from TOML)
+           print(f"tools.pkgq.timeout: {config.tools.pkgq.timeout}")  # 90 (CLI override!)
+           print(f"tools.git.enabled: {config.tools.git.enabled}")  # False (from TOML)
+       finally:
+           os.chdir(original_dir)
+
+Key Takeaways
+~~~~~~~~~~~~~
+
+1. **Use @dataclass (NOT frozen=True)** for parent configs
+2. **Call register_field() before get_config()** when CLI is enabled
+3. **TOML sections follow hierarchy**: ``[parent.field]``
+4. **CLI args use dashed names**: ``--parent-field-option``
+5. **Plugins can register to multiple parent configs**
+6. **Test with _reset_factories()** to avoid state leakage
+
 Complete Example
 ----------------
 
