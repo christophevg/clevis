@@ -297,6 +297,19 @@ def _reset_factories() -> None:
   _default_parser = argparse.ArgumentParser()
 
 
+def has_factory(clz: type) -> bool:
+  """
+  Check if a Factory exists for a configuration class.
+
+  Args:
+    clz: The dataclass type to check.
+
+  Returns:
+    True if a factory exists for the class, False otherwise.
+  """
+  return clz in _factories
+
+
 def get_factory(clz: type) -> Factory:
   """
   Get the Factory for a configuration class.

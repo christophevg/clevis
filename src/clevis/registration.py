@@ -25,7 +25,7 @@ from collections.abc import Callable
 from dataclasses import MISSING, Field, fields
 from typing import Any
 
-from clevis.factory import get_factory
+from clevis.factory import get_factory, has_factory
 
 
 class RegistrationError(Exception):
@@ -86,8 +86,8 @@ def register_field(
     )
 
   # Check if registration is too late (after parser configured)
-  factory = get_factory(parent)
-  if factory._configured:
+  # Only check if factory already exists - don't create one just to check
+  if has_factory(parent) and get_factory(parent)._configured:
     raise RuntimeError(
       f"Cannot register field '{name}' after get_config() has been called. "
       f"Register fields before loading configuration."
