@@ -8,21 +8,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Plugin configuration support for architectures like Yoker.
 
-- [ ] **P2-007: Implement dynamic field registration**
-  - Add `register_field(parent, name, field_type, default_factory)` function
-  - Support adding fields to non-frozen dataclasses at runtime
-  - Derive TOML namespace from parent hierarchy (no explicit namespace param)
-  - Generate CLI args for registered fields (`--parent-name-field`)
-  - Handle error cases: frozen parent, duplicate field, late registration
-  - **Satisfies**: R100-R106 (new requirements to be added)
-  - **Acceptance**:
-    - `register_field(ToolsConfig, "pkgq", PkgqToolConfig)` adds field
-    - TOML `[tools.pkgq]` loads into `config.tools.pkgq`
-    - CLI `--tools-pkgq-enabled` sets value
-    - `TypeError` raised for frozen parent
-    - `ValueError` raised for duplicate field name
-    - `RuntimeError` raised if called after `get_config()`
-  - **Reference**: `analysis/dynamic-registration.md`
 
 - [ ] **P2-008: Update @configclass decorator**
   - Add validation: `config` parameter requires `cmd` parameter
@@ -102,6 +87,22 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-007: Implement dynamic field registration** ✅ 2026-06-09 (PR #12)
+  - Add `register_field(parent, name, field_type, default_factory)` function
+  - Support adding fields to non-frozen dataclasses at runtime
+  - Derive TOML namespace from parent hierarchy (no explicit namespace param)
+  - Generate CLI args for registered fields (`--parent-name-field`)
+  - Handle error cases: frozen parent, duplicate field, late registration
+  - **Satisfies**: R100-R106 (new requirements to be added)
+  - **Acceptance**:
+    - `register_field(ToolsConfig, "pkgq", PkgqToolConfig)` adds field
+    - TOML `[tools.pkgq]` loads into `config.tools.pkgq`
+    - CLI `--tools-pkgq-enabled` sets value
+    - `TypeError` raised for frozen parent
+    - `ValueError` raised for duplicate field name
+    - `RuntimeError` raised if called after `get_config()`
+  - **Reference**: `analysis/dynamic-registration.md`
 
 - [x] **P2-006: Enhance subcommand support** ✅ 2026-06-05 (PR #9)
   - Add `help` parameter to `@configclass(cmd="name", help="description")` for subcommand help text
