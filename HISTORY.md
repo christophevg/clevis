@@ -5,7 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.3.0 (2026-06-05)
+## 0.4.0 (2026-06-09)
+
+### Added
+
+- **Dynamic Field Registration API (P2-007)**: New `register_field()` function enables runtime field registration for plugin systems
+  - Register new configuration fields after dataclass definition
+  - Support for plugins that extend configuration schema
+  - Enhanced introspection with `field.owner` tracking
+- **Plugin System Capabilities**: Infrastructure for extending configuration schemas dynamically
+  - Field registration API for third-party extensions
+  - Example plugins demonstrating dynamic registration
+- **Enhanced Subcommand Validation**: Validation that subcommand configs are not nested incorrectly
+  - Prevents configuration schema errors
+  - Better error messages for nested configuration issues
+
+### Fixed
+
+- **Nested Config Handling**: Fixed duplicate CLI args from nested configs
+  - Tracks `nested_prefix` for config hierarchy
+  - Prevents argument duplication in subcommands
+- **Dynamic Registration**: Resolved repr and TOML loading issues
+  - Fixed factory creation in `register_field` check
+  - Correct TOML config extraction for subcommands
+
+### Changed
+
+- **Documentation**: Comprehensive documentation upgrade with examples
+  - Added API review and field owner tracking tests
+  - New examples: environment, validation, library_mode, simple plugin registration
+  - Examples README index for better navigation
+  - Improved consistency across documentation
 
 ### Added
 
