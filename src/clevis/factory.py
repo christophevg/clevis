@@ -260,6 +260,15 @@ class Factory:
       concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
 
       if is_dataclass(concrete_type):
+        # Check if nested config has cmd - that's not allowed
+        if has_factory(concrete_type):
+          nested_factory = get_factory(concrete_type)
+          if nested_factory.cmd:
+            raise ValueError(
+              f"Cannot nest subcommand config '{concrete_type.__name__}' "
+              f"inside '{clz.__name__}'. Subcommand configs must be at root level."
+            )
+
         # Build nested prefix for this field
         # path contains the path from the current config class to this field
         # parent_prefix is the full prefix from the root to this point

@@ -550,6 +550,40 @@ class TestDynamicFieldRegistration:
     assert config.tools.pkgq.active is True
 
 
+class TestNestedSubcommand:
+  """Tests for nested subcommand validation."""
+
+  def setup_method(self):
+    """Reset factories before each test."""
+    _reset_factories()
+
+  def test_nested_subcommand_raises_error(self):
+    """Test that nesting a config with cmd raises an error."""
+    _reset_factories()
+
+    @configclass(cmd="check")
+    class CheckConfig:
+      verbose: bool = False
+
+    @dataclass
+    class ModuleConfig:
+      check: CheckConfig = field(default_factory=CheckConfig)
+
+    with pytest.raises(ValueError, match="Cannot nest subcommand config"):
+      get_config(
+        ModuleConfig,
+        name="test",
+        user=False,
+        project=False,
+        cli=True,
+        args=[],
+        security={
+          "file_permissions": SecurityAction.DONT_CHECK,
+          "directory_permissions": SecurityAction.DONT_CHECK,
+        },
+      )
+
+
 class TestMultipleGetConfigCalls:
   """Tests for multiple get_config calls on same configs."""
 
