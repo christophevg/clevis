@@ -1,0 +1,13 @@
+# validation.toml
+# Example configuration demonstrating validation patterns
+
+app_name = "Validation Demo App"
+
+[server]
+url = "https://api.example.com"
+port = 8080
+timeout_seconds = 30
+
+[features]
+max_connections = 100
+debug = false
