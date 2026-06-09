@@ -34,9 +34,7 @@ class TestLiteralTypes:
     class LoggingConfig:
       level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    config = get_config(
-      LoggingConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(LoggingConfig, name="test", user=False, project=False, args=[])
     assert config.level == "INFO"
 
   def test_literal_with_valid_value_from_toml(self):
@@ -114,9 +112,7 @@ class TestTupleTypes:
     class PathsConfig:
       paths: tuple[str, ...] = (".",)
 
-    config = get_config(
-      PathsConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(PathsConfig, name="test", user=False, project=False, args=[])
     assert config.paths == (".",)
     assert isinstance(config.paths, tuple)
 
@@ -201,9 +197,7 @@ class TestDictWithDataclassValues:
     class PermissionsConfig:
       handlers: dict[str, HandlerConfig] = field(default_factory=dict)
 
-    config = get_config(
-      PermissionsConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(PermissionsConfig, name="test", user=False, project=False, args=[])
     assert config.handlers == {}
     assert isinstance(config.handlers, dict)
 
@@ -315,9 +309,7 @@ class TestFrozenDataclass:
       name: str = "test"
       value: int = 42
 
-    config = get_config(
-      FrozenConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(FrozenConfig, name="test", user=False, project=False, args=[])
     assert config.name == "test"
     assert config.value == 42
 
@@ -365,9 +357,7 @@ value = 100
       name: str = "test"
       value: int = 42
 
-    config = get_config(
-      FrozenConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(FrozenConfig, name="test", user=False, project=False, args=[])
 
     # Should raise FrozenInstanceError when trying to modify
     with pytest.raises(Exception):  # FrozenInstanceError
@@ -387,9 +377,7 @@ value = 100
       name: str = "app"
       settings: ImmutableSettings = field(default_factory=ImmutableSettings)
 
-    config = get_config(
-      AppConfig, name="test", user=False, project=False, args=[]
-    )
+    config = get_config(AppConfig, name="test", user=False, project=False, args=[])
     assert config.name == "app"
     assert config.settings.timeout == 30
     assert config.settings.retries == 3
@@ -729,7 +717,7 @@ class TestSetType:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('ids = [1, 2, 3, 3, 2, 1]\n')
+      config_file.write_text("ids = [1, 2, 3, 3, 2, 1]\n")
 
       original_dir = os.getcwd()
       try:
