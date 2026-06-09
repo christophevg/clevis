@@ -92,6 +92,37 @@ class TestRegisterField:
     config = ToolsConfig()
     assert config.pkgq.enabled is True
 
+  def test_register_field_repr_includes_dynamic_field(self):
+    """Dynamic fields should appear in __repr__ output."""
+    _reset_factories()
+
+    @dataclass
+    class ListToolConfig:
+      enabled: bool = True
+      format: str = "table"
+
+    @dataclass
+    class ToolsConfig:
+      list: ListToolConfig = field(default_factory=ListToolConfig)
+
+    @dataclass
+    class PkgqToolConfig:
+      active: bool = True
+      timeout: int = 30
+
+    # Register the field
+    register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+    # Create instance
+    config = ToolsConfig()
+
+    # Check repr includes both fields
+    repr_str = repr(config)
+    assert "list=" in repr_str
+    assert "pkgq=" in repr_str
+    assert "ListToolConfig" in repr_str
+    assert "PkgqToolConfig" in repr_str
+
 
 class TestRegisterFieldErrors:
   """Tests for register_field() error cases."""

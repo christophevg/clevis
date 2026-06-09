@@ -132,6 +132,9 @@ def register_field(
   # This is necessary because the original __init__ doesn't know about the new field
   _create_init_with_new_field(parent, name, default_factory)
 
+  # Update __repr__ to include all fields (including dynamically registered ones)
+  _update_repr(parent)
+
 
 def _create_init_with_new_field(
   cls: type, field_name: str, default_factory: Callable[[], Any]
@@ -168,3 +171,27 @@ def _create_init_with_new_field(
 
   # Replace __init__
   cls.__init__ = __init__  # type: ignore[misc]
+
+
+def _update_repr(cls: type) -> None:
+  """Update __repr__ to include all fields including dynamically registered ones.
+
+  The dataclass-generated __repr__ only includes fields that existed at class
+  creation time. This creates a custom __repr__ that iterates over all current
+  fields in __dataclass_fields__.
+  """
+
+  def __repr__(self: Any) -> str:
+    """Custom repr that includes all fields."""
+    # Get all fields in the order they appear in __dataclass_fields__
+    all_fields = fields(cls)
+    # Build the field=value pairs
+    field_values = []
+    for f in all_fields:
+      if f.repr:
+        value = getattr(self, f.name)
+        field_values.append(f"{f.name}={value!r}")
+    return f"{cls.__name__}({', '.join(field_values)})"
+
+  # Replace __repr__
+  cls.__repr__ = __repr__  # type: ignore[method-assign, assignment]
