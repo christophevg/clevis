@@ -5,7 +5,6 @@ and CLI argument generation.
 """
 
 import argparse
-import functools
 from argparse import Action, Namespace
 from dataclasses import Field, dataclass, field, fields, is_dataclass
 from typing import Any, Literal, Protocol, Union, get_args, get_origin
@@ -320,19 +319,16 @@ class Factory:
 
         if concrete_type is bool:
           # Boolean field: --field sets to True, --no-field sets to False
-          arg = functools.partial(
-            target_parser.add_argument,
+          target_parser.add_argument(
             f"--{cli_name}",
             dest=name,
             default=None,
             action="store_true",
             help=f"set {name} to True",
           )
-          _ = arg()
 
           # Add negation argument
-          arg_no = functools.partial(
-            target_parser.add_argument,
+          target_parser.add_argument(
             f"--no-{cli_name}",
             dest=name,
             default=None,
@@ -340,13 +336,11 @@ class Factory:
             const=False,
             help=f"set {name} to False",
           )
-          _ = arg_no()
 
         elif origin is list:
           # List field: --field VALUE appends values
           element_type = get_args(concrete_type)[0]
-          arg = functools.partial(
-            target_parser.add_argument,
+          target_parser.add_argument(
             f"--{cli_name}",
             dest=name,
             default=None,
@@ -354,11 +348,9 @@ class Factory:
             type=element_type,
             help=f"append to {name} (can be used multiple times)",
           )
-          _ = arg()
 
           # Add clear argument
-          arg_no = functools.partial(
-            target_parser.add_argument,
+          target_parser.add_argument(
             f"--no-{cli_name}",
             dest=name,
             default=None,
@@ -366,19 +358,16 @@ class Factory:
             const=[],  # Empty list marker
             help=f"clear {name} (set to empty list)",
           )
-          _ = arg_no()
 
         else:
           # Default: scalar field with type conversion
-          arg = functools.partial(
-            target_parser.add_argument,
+          target_parser.add_argument(
             f"--{cli_name}",
             dest=name,
             default=None,
             type=concrete_type,
             help=f"provide {name}",
           )
-          _ = arg()
 
   def get_args(self, args: list[str] | None = None) -> dict[str, Any]:
     """
