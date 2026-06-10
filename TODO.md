@@ -9,15 +9,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 Plugin configuration support for architectures like Yoker.
 
 
-- [ ] **P2-008: Update @configclass decorator**
-  - Add validation: `config` parameter requires `cmd` parameter
-  - Raise clear error if `config` used without `cmd`
-  - Document `config` parameter is for TOML section override with subcommands
-  - **Satisfies**: R107 (new requirement)
-  - **Acceptance**:
-    - `@configclass(cmd="cli", config="client")` works
-    - `@configclass(config="output")` raises error with message
-  - **Reference**: `analysis/dynamic-registration.md`
 
 - [ ] **P2-009: Add comprehensive documentation and examples**
   - Update `PACKAGE.md` with all 6 use cases
@@ -125,6 +116,16 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-008: Update @configclass decorator** ✅ 2026-06-10 (PR #16)
+  - Add validation: `config` parameter requires `cmd` parameter
+  - Raise clear error if `config` used without `cmd`
+  - Document `config` parameter is for TOML section override with subcommands
+  - **Satisfies**: R107 (new requirement)
+  - **Acceptance**:
+    - `@configclass(cmd="cli", config="client")` works
+    - `@configclass(config="output")` raises error with message
+  - **Reference**: `analysis/dynamic-registration.md`
 
 - [x] **P2-011: Add list-append behavior for CLI arguments** ✅ 2026-06-10 (PR #15)
   - Implement append behavior for `list[T]` fields: `--field value` can be used multiple times
