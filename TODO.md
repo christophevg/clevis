@@ -8,7 +8,63 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Plugin configuration support for architectures like Yoker.
 
+- [ ] **P2-013: Fix overly broad exception handling**
+  - Replace `except BaseException:` at `__init__.py:131` with `except Exception:`
+  - BaseException catches KeyboardInterrupt, SystemExit, GeneratorExit which should propagate
+  - Only use for cleanup with explicit re-raise
+  - **Acceptance**:
+    - `except Exception:` used instead of `except BaseException:`
+    - System exceptions propagate naturally
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
 
+- [ ] **P2-014: Move import to module level**
+  - Move `import re` from inside exception handler at `__init__.py:591` to top of file
+  - Import statements should be at module level for clarity and performance
+  - **Acceptance**:
+    - `import re` at module level in `__init__.py`
+    - Code in exception handler uses the module-level import
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P2-015: Extract nested function to module level**
+  - Extract `register_arg_name` nested function from `factory.py:332-364` to module level
+  - Function captures outer scope variables making it hard to test
+  - **Acceptance**:
+    - `register_arg_name` is a module-level function with explicit parameters
+    - Function is unit-testable in isolation
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P2-016: Document dataclass __init__ generation limitations**
+  - Document in `registration.py` that manual `__init__` generation at lines 139-173 doesn't handle all dataclass features
+  - Features not handled: kw_only, init=False fields, etc.
+  - Add comments or docstring explaining limitations
+  - **Acceptance**:
+    - Docstring or comments explain what dataclass features are not supported
+    - Clear guidance for future maintainers
+    - No functional changes to code
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P2-017: Extract TOML extension constants**
+  - Extract magic strings for `.toml` and `.{name}.toml` to constants
+  - Strings appear 11+ times across files
+  - Define: `TOML_EXT = ".toml"`, `USER_CONFIG_TEMPLATE = ".{name}.toml"`, `PROJECT_CONFIG_TEMPLATE = "{name}.toml"`
+  - **Acceptance**:
+    - Constants defined in appropriate module
+    - All magic strings replaced with constants
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P2-018: Remove misleading empty try/finally**
+  - Fix empty try/finally blocks at `__init__.py:501-511`
+  - Pattern `try: ... finally: # fd is closed by _load_toml_from_fd` is misleading
+  - Remove try/finally and add assertion comment instead
+  - **Acceptance**:
+    - Misleading try/finally removed
+    - Clear comment or assertion about file descriptor handling
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
 
 - [ ] **P2-009: Add comprehensive documentation and examples**
   - Update `PACKAGE.md` with all 6 use cases
@@ -38,6 +94,77 @@ Plugin configuration support for architectures like Yoker.
 
 Optional improvements for future releases.
 
+- [ ] **P3-008: Encapsulate global state in ParserRegistry class**
+  - Refactor `factory.py:113-124` to use a `ParserRegistry` class
+  - Three related global dictionaries (`_registered_field_owners`, `_registered_arg_names`, `_configured_parsers`) could be better encapsulated
+  - **Acceptance**:
+    - `ParserRegistry` class manages parser-related global state
+    - Clearer API for state management
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-009: Refactor _merge_list_args to return merged dict**
+  - Function at `__init__.py:337-392` modifies both `cli_args` and `toml_cfg` in-place
+  - Return merged dict instead of mutating inputs for clearer flow
+  - **Acceptance**:
+    - Function returns new dict instead of mutating inputs
+    - Callers updated to use return value
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-010: Extract methods from _configure_fields**
+  - `_configure_fields` at `factory.py:246-477` is 231 lines - too long
+  - Extract: `_configure_nested_field()`, `_configure_boolean_arg()`, `_configure_list_arg()`, `_configure_scalar_arg()`, `_add_arg_aliases()`
+  - **Acceptance**:
+    - Method split into focused helper methods
+    - Each method has single responsibility
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-011: Clarify decorator return logic**
+  - Add comments explaining `configclass.py:103-106` decorator pattern variants
+  - Conditional `if cls and not cmd and help is None...` is hard to parse
+  - **Acceptance**:
+    - Clear comments explaining with/without argument decorator patterns
+    - Easier to understand for maintainers
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-012: Split unpack_type into helper functions**
+  - Function at `factory.py:67-110` handles many type scenarios in dense code
+  - Split into: Union handling, container handling, Literal handling helpers
+  - **Acceptance**:
+    - Helper functions for each type category
+    - Main function orchestrates helpers
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-013: Document private API usage**
+  - Add comment at `registration.py:109` explaining `dataclasses._FIELD` usage
+  - Note potential migration path for future Python versions
+  - **Acceptance**:
+    - Comment explains why private API is used
+    - Migration path documented
+    - No functional changes
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-014: Separate ConfigError message formatting**
+  - Extract message formatting logic from `ConfigError.__init__` at `__init__.py:275-284`
+  - Create `_format_message()` helper
+  - **Acceptance**:
+    - Message formatting in separate helper
+    - Constructor focuses on initialization
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P3-015: Rename get_factory to clarify singleton behavior**
+  - Rename `get_factory()` at `factory.py:547-604` to `get_or_create_factory()`
+  - Or document behavior clearly in docstring
+  - Current name doesn't convey factory creation
+  - **Acceptance**:
+    - Function renamed OR docstring clearly documents creation behavior
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
 - [ ] **P3-004: Achieve 90%+ test coverage**
   - Nice-to-have: bring coverage from current ~80% to ≥90%
   - Single parent task with the following sub-checklist. Each item is a real, named test case.
@@ -57,6 +184,46 @@ Optional improvements for future releases.
 ### Phase 4: Parking Lot (P4 - Speculative, No Owner)
 
 These are ideas with no current demand or owner. They are kept here so the intent is not lost, but they are **not scheduled** and should not be picked up without explicit user request and a re-evaluation.
+
+- [ ] **P4-005: Move default parser to Factory.__init__**
+  - Move global default parser assignment at `factory.py:52-53` to Factory.__init__
+  - **Acceptance**:
+    - Default parser created in Factory.__init__
+    - No module-level mutable state for default parser
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P4-006: Add logging configuration documentation**
+  - Add note in docs about logging configuration for library users
+  - Module-level logger at `__init__.py:43` needs configuration guidance
+  - **Acceptance**:
+    - Documentation includes logging configuration section
+    - Users understand how to configure clevis logging
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P4-007: Review TypeVar T usage**
+  - TypeVar T at `configclass.py:13` declared but only used once
+  - Consider `TypeVar("T", bound=type)` or remove and use direct type annotation
+  - **Acceptance**:
+    - TypeVar properly constrained OR removed if unnecessary
+    - Type checking still works
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P4-008: Standardize docstring style**
+  - Inconsistent docstring style across files (Google vs NumPy style)
+  - Standardize on one format across all modules
+  - **Acceptance**:
+    - All docstrings follow same style
+    - Consistent with project conventions
+  - **Reference**: Code review 2026-06-10
+
+- [ ] **P4-009: Expand factory.py module docstring**
+  - Expand minimal docstring at `factory.py:5`
+  - Explain Factory pattern, lazy configuration, and relationship to other modules
+  - **Acceptance**:
+    - Comprehensive module docstring
+    - Explains architecture and design decisions
+  - **Reference**: Code review 2026-06-10
 
 - [ ] **P4-001: Async configuration loading**
   - `get_config_async()` variant using `aiofiles`
