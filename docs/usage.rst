@@ -285,8 +285,116 @@ Boolean fields use flag-style arguments:
    # Enable debug mode
    python app.py --debug
 
-   # Don't use --no-debug (not supported)
-   # Just don't pass --debug if you want False
+   # Disable debug mode (explicit False)
+   python app.py --no-debug
+
+   # Last flag wins
+   python app.py --debug --no-debug  # Result: debug=False
+
+Boolean fields support both ``--flag`` (sets to ``True``) and ``--no-flag`` (sets to ``False``).
+This allows explicit control over boolean values from the command line.
+
+List Arguments
+~~~~~~~~~~~~~~
+
+List fields support append behavior - values accumulate when the argument is repeated:
+
+.. code-block:: python
+
+   from dataclasses import dataclass, field
+
+   @dataclass
+   class Config:
+       packages: list[str] = field(default_factory=list)
+       ports: list[int] = field(default_factory=list)
+
+**Appending values:**
+
+.. code-block:: bash
+
+   # Append multiple values
+   python app.py --packages pkgq --packages c3 --packages agent
+   # Result: packages = ["pkgq", "c3", "agent"]
+
+   # Works with all list types
+   python app.py --ports 8080 --ports 8081 --ports 8082
+   # Result: ports = [8080, 8081, 8082]
+
+**Clearing lists:**
+
+.. code-block:: bash
+
+   # Set list to empty
+   python app.py --no-packages
+   # Result: packages = []
+
+   # Clear then add (last wins)
+   python app.py --packages old --no-packages --packages new
+   # Result: packages = ["new"]
+
+**Merging with TOML:**
+
+List values from CLI are **appended** to TOML values, not replaced:
+
+.. code-block:: toml
+
+   # myapp.toml
+   packages = ["base", "core"]
+
+.. code-block:: bash
+
+   # CLI appends to TOML values
+   python app.py --packages plugin1 --packages plugin2
+   # Result: packages = ["base", "core", "plugin1", "plugin2"]
+
+   # Clear TOML values with --no-field
+   python app.py --no-packages --packages urgent
+   # Result: packages = ["urgent"]
+
+**Type conversion:**
+
+List elements are type-converted just like scalar fields:
+
+.. code-block:: python
+
+   from pathlib import Path
+
+   @dataclass
+   class Config:
+       paths: list[Path] = field(default_factory=list)
+       ports: list[int] = field(default_factory=list)
+
+.. code-block:: bash
+
+   # Path conversion
+   python app.py --paths /var/log --paths /var/run
+   # Result: paths = [Path("/var/log"), Path("/var/run")]
+
+   # Int conversion with validation
+   python app.py --ports 80 --ports 443
+   # Result: ports = [80, 443]
+
+   # Invalid value raises error
+   python app.py --ports abc
+   # Error: argument --ports: invalid int value: 'abc'
+
+**Conflict resolution:**
+
+When both ``--field`` and ``--no-field`` are provided, the **last one wins**:
+
+.. code-block:: bash
+
+   # Add, clear, add
+   python app.py --packages a --no-packages --packages b
+   # Result: packages = ["b"]
+
+   # Clear, add
+   python app.py --no-packages --packages urgent
+   # Result: packages = ["urgent"]
+
+   # Add, add, clear
+   python app.py --packages a --packages b --no-packages
+   # Result: packages = []
 
 Overriding Defaults
 ~~~~~~~~~~~~~~~~~~~
