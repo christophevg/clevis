@@ -661,8 +661,8 @@ class TestEdgeCases:
         args=["--ports", "not_a_number"],
       )
 
-  def test_optional_list_field(self):
-    """Optional list fields should work with CLI args."""
+  def test_optional_list_field_without_toml(self):
+    """Optional list fields without CLI args should remain None."""
     _reset_factories()
 
     @dataclass
@@ -670,25 +670,33 @@ class TestEdgeCases:
       packages: list[str] | None = None
 
     # No CLI args - should be None (default)
-    config1 = get_config(
+    config = get_config(
       Config,
       name="test",
       user=False,
       project=False,
       args=[],
     )
-    assert config1.packages is None
+    assert config.packages is None
+
+  def test_optional_list_field_with_toml(self):
+    """Optional list fields with TOML values should merge with CLI args."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      packages: list[str] | None = None
 
     # With CLI args - should be the list
     _reset_factories()
-    config2 = get_config(
+    config = get_config(
       Config,
       name="test",
       user=False,
       project=False,
       args=["--packages", "pkgq"],
     )
-    assert config2.packages == ["pkgq"]
+    assert config.packages == ["pkgq"]
 
   def test_list_clear_then_append(self):
     """--no-field --field X should result in [X] (clear, then append)."""
@@ -706,3 +714,43 @@ class TestEdgeCases:
       args=["--no-packages", "--packages", "urgent"],
     )
     assert config.packages == ["urgent"]
+
+  def test_duplicate_registration_last_wins(self):
+    """--field and --no-field for same field: last wins."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      packages: list[str] = field(default_factory=list)
+      debug: bool = False
+
+    # Test list field: --field, --no-field, --field (last wins)
+    config1 = get_config(
+      Config,
+      name="test",
+      user=False,
+      project=False,
+      args=["--packages", "a", "--no-packages", "--packages", "b"],
+    )
+    assert config1.packages == ["b"]
+
+    # Test boolean field: --field, --no-field (last wins)
+    config2 = get_config(
+      Config,
+      name="test",
+      user=False,
+      project=False,
+      args=["--debug", "--no-debug"],
+    )
+    assert config2.debug is False
+
+    # Test boolean field: --no-field, --field (last wins)
+    config3 = get_config(
+      Config,
+      name="test",
+      user=False,
+      project=False,
+      args=["--no-debug", "--debug"],
+    )
+    assert config3.debug is True
+

@@ -392,7 +392,7 @@ class Factory:
             default=None,
             action="append",
             type=element_type,
-            help=f"append to {name} (can be used multiple times)",
+            help=f"append {element_type.__name__} to {name} list (can be used multiple times)",
           )
 
           # Add clear argument
@@ -449,7 +449,10 @@ class Factory:
               default=None,
               action="append",
               type=element_type,
-              help=f"append to {name} (can be used multiple times, alias for --{cli_name})",
+              help=(
+                f"append {element_type.__name__} to {name} list "
+                f"(can be used multiple times, alias for --{cli_name})"
+              ),
             )
 
             # Add clear argument for alias
@@ -598,3 +601,4 @@ def get_factory(clz: type) -> Factory:
     # create default factory
     _factories[clz] = Factory(clz)
     return _factories[clz]
+
