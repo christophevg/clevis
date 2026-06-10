@@ -62,6 +62,28 @@ Optional improvements for future releases.
     - All sub-checklist items have at least one passing test
     - No previously-tested behavior regresses
 
+- [ ] **P3-005: Improve list-append code quality (code review)**
+  - M1: Add warning log when non-list TOML value is silently converted to empty list
+  - M2: Document in `_merge_list_args()` docstring that `cli_args` is modified in-place
+  - M3: Split `test_optional_list_field` into separate test methods for clarity
+  - **Reference**: `analysis/code-review-list-append-cli.md`
+  - **Priority**: Medium (improvements, not blocking)
+
+- [ ] **P3-006: Security hardening for list-append (security review)**
+  - Consider optional size limits for list fields to prevent unbounded memory consumption
+  - Add documentation note about path validation for `list[Path]` fields
+  - Consider optional validation for empty strings in list fields
+  - **Reference**: `analysis/security-list-append-cli-arguments.md`
+  - **Priority**: Medium (defense-in-depth)
+
+- [ ] **P3-007: API improvements for list-append (API review)**
+  - Improve help text to include type information: "append {type} to {name} list"
+  - Document boolean merge behavior (`--no-field` overrides TOML)
+  - Add test for duplicate registration handling (`--field` and `--no-field` for same field)
+  - Add test for nested list fields with prefix (`--database-packages`)
+  - **Reference**: `analysis/2026-06-10-api-review-list-append-cli.md`
+  - **Priority**: Low (polish items)
+
 ### Phase 4: Parking Lot (P4 - Speculative, No Owner)
 
 These are ideas with no current demand or owner. They are kept here so the intent is not lost, but they are **not scheduled** and should not be picked up without explicit user request and a re-evaluation.
