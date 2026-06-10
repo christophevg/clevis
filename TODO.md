@@ -8,6 +8,21 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Plugin configuration support for architectures like Yoker.
 
+- [ ] **P2-011: Add list-append behavior for CLI arguments**
+  - Implement append behavior for `list[T]` fields: `--field value` can be used multiple times
+  - Add `--no-field` prefix to set list fields to empty list
+  - Add `--no-field` prefix for boolean fields to set to False (complement to `--field`)
+  - CLI values should merge (append) with TOML values, not replace
+  - Support all list types (`list[str]`, `list[int]`, etc.)
+  - **GitHub Issue**: #14
+  - **Satisfies**: R110-R114
+  - **Acceptance**:
+    - `--packages pkgq --packages c3` results in `["pkgq", "c3"]` (append)
+    - `--no-packages` results in `[]` (empty list)
+    - `--no-debug` sets boolean `debug` to `False`
+    - TOML `packages = ["pkgq"]` + CLI `--packages c3` = `["pkgq", "c3"]` (merge)
+    - Works for `list[str]`, `list[int]`, and other list types
+    - Tests cover: append, empty list, merge with TOML, all list types
 
 - [ ] **P2-008: Update @configclass decorator**
   - Add validation: `config` parameter requires `cmd` parameter

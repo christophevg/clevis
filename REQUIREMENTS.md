@@ -87,6 +87,16 @@ Enable plugin architectures to inject configuration fields at runtime.
 - [ ] R108: Documentation covers all 6 use cases with examples
 - [ ] R109: Tests cover dynamic registration, error cases, backward compatibility
 
+### List-Append CLI Behavior (P2-011, issue #14)
+
+Support for accumulative CLI arguments for list types and negative boolean flags.
+
+- [ ] R110: `list[T]` fields support `--field value` multiple times with append behavior
+- [ ] R111: `--no-field` prefix sets field to empty list (for list types)
+- [ ] R112: `--no-field` prefix sets boolean fields to False (in addition to `--field` setting to True)
+- [ ] R113: CLI values merge with TOML values (append semantics, not replace)
+- [ ] R114: Works for all list types (`list[str]`, `list[int]`, etc.)
+
 ## Non-Functional Requirements
 
 ### Code Quality
