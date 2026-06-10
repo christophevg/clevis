@@ -71,6 +71,14 @@ def configclass(
     clz = dataclass(clz)
     factory = get_factory(clz)  # get_factory upserts if not yet available
 
+    # Validate config requires cmd
+    if config is not None and cmd is None:
+      raise ValueError(
+        f"@configclass parameter 'config' requires 'cmd' parameter. "
+        f"Use @configclass(cmd='name', config='section') instead. "
+        f"Class: {clz.__name__}"
+      )
+
     # Warn if help/aliases used without cmd
     if not cmd:
       if help is not None:

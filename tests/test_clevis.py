@@ -478,6 +478,29 @@ class TestSubcommands:
     assert factory.help == "Run diagnostics"
     assert factory.aliases == ["c"]
 
+  def test_configclass_config_without_cmd_raises_error(self):
+    """Test that config parameter without cmd raises ValueError."""
+    _reset_factories()
+
+    with pytest.raises(ValueError) as exc_info:
+      @configclass(config="output")
+      class OutputConfig:
+        rich: bool = False
+
+    assert "config' requires 'cmd'" in str(exc_info.value)
+
+  def test_configclass_config_with_cmd_works(self):
+    """Test that config parameter with cmd works correctly."""
+    _reset_factories()
+
+    @configclass(cmd="cli", config="client")
+    class ClientConfig:
+      host: str = "localhost"
+
+    factory = get_factory(ClientConfig)
+    assert factory.cmd == "cli"
+    assert factory.config == "client"
+
   def test_get_cmd(self):
     """get_cmd() should return active subcommand name."""
     _reset_factories()

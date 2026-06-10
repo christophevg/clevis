@@ -53,35 +53,16 @@ class TestConfigKey:
       finally:
         os.chdir(original_dir)
 
-  def test_config_without_cmd_extraction_only(self):
-    """config without cmd allows TOML extraction without CLI subcommand."""
+  def test_config_without_cmd_raises_error(self):
+    """config without cmd should raise ValueError."""
     _reset_factories()
 
-    @configclass(config="output")
-    class OutputConfig:
-      rich: bool = False
+    with pytest.raises(ValueError) as exc_info:
+      @configclass(config="output")
+      class OutputConfig:
+        rich: bool = False
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-      config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text("[output]\nrich = true\n")
-
-      original_dir = os.getcwd()
-      try:
-        os.chdir(tmpdir)
-        config = get_config(
-          OutputConfig,
-          name="test",
-          user=False,
-          project=True,
-          args=[],  # No subcommand
-          security={
-            "file_permissions": SecurityAction.DONT_CHECK,
-            "directory_permissions": SecurityAction.DONT_CHECK,
-          },
-        )
-        assert config.rich is True
-      finally:
-        os.chdir(original_dir)
+    assert "config' requires 'cmd'" in str(exc_info.value)
 
   def test_cmd_without_config_backward_compatible(self):
     """cmd without config should use cmd for TOML extraction (backward compatible)."""
@@ -351,7 +332,7 @@ class TestConfigKey:
     """config parameter should be stored in Factory instance."""
     _reset_factories()
 
-    @configclass(config="mysection")
+    @configclass(cmd="test", config="mysection")
     class TestConfig:
       name: str = "test"
 
