@@ -58,6 +58,7 @@ class TestConfigKey:
     _reset_factories()
 
     with pytest.raises(ValueError) as exc_info:
+
       @configclass(config="output")
       class OutputConfig:
         rich: bool = False
