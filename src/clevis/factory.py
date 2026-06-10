@@ -118,6 +118,10 @@ _configured_parsers: list[Parser] = []
 # (e.g., as --list-enabled and --tools-list-enabled)
 _registered_field_owners: dict[Parser, set[tuple[type, str]]] = {}
 
+# Track all registered argument names (canonical + aliases) for conflict detection
+# Key: parser, Value: set of argument names (e.g., {"--packages", "--with"})
+_registered_arg_names: dict[Parser, set[str]] = {}
+
 
 def _ensure_configured(parser: Parser) -> Parser:
   """
@@ -233,6 +237,8 @@ class Factory:
     # Initialize tracking for this parser if needed
     if target_parser not in _registered_field_owners:
       _registered_field_owners[target_parser] = set()
+    if target_parser not in _registered_arg_names:
+      _registered_arg_names[target_parser] = set()
 
     # Configure fields with nested prefix tracking
     self._configure_fields(self.config_class, [], self._nested_prefix, target_parser, set())
@@ -317,6 +323,46 @@ class Factory:
         # Detect list types
         origin = get_origin(concrete_type)
 
+        # Extract aliases from field metadata
+        cli_aliases = f.metadata.get("cli_aliases", [])
+        if not isinstance(cli_aliases, list):
+          cli_aliases = []
+
+        # Helper function to register an argument name and check for conflicts
+        def register_arg_name(arg_name: str, field_name: str) -> None:
+          """Register an argument name and check for conflicts."""
+          if arg_name in _registered_arg_names[target_parser]:
+            # Find which field already registered this argument
+            raise ValueError(
+              f"Alias '{arg_name}' conflicts with existing argument for field '{field_name}'"
+            )
+          _registered_arg_names[target_parser].add(arg_name)
+
+        # Register canonical argument names
+        if concrete_type is bool:
+          register_arg_name(f"--{cli_name}", name)
+          register_arg_name(f"--no-{cli_name}", name)
+        elif origin is list:
+          register_arg_name(f"--{cli_name}", name)
+          register_arg_name(f"--no-{cli_name}", name)
+        else:
+          register_arg_name(f"--{cli_name}", name)
+
+        # Register alias argument names
+        for alias in cli_aliases:
+          if not isinstance(alias, str):
+            continue
+          # Alias replaces the entire cli_name (without prefixes)
+          if concrete_type is bool:
+            register_arg_name(f"--{alias}", name)
+            register_arg_name(f"--no-{alias}", name)
+          elif origin is list:
+            register_arg_name(f"--{alias}", name)
+            register_arg_name(f"--no-{alias}", name)
+          else:
+            register_arg_name(f"--{alias}", name)
+
+        # Add canonical arguments
         if concrete_type is bool:
           # Boolean field: --field sets to True, --no-field sets to False
           target_parser.add_argument(
@@ -368,6 +414,63 @@ class Factory:
             type=concrete_type,
             help=f"provide {name}",
           )
+
+        # Add alias arguments (same dest as canonical)
+        for alias in cli_aliases:
+          if not isinstance(alias, str):
+            continue
+
+          if concrete_type is bool:
+            # Boolean alias: --alias sets to True, --no-alias sets to False
+            target_parser.add_argument(
+              f"--{alias}",
+              dest=name,
+              default=None,
+              action="store_true",
+              help=f"set {name} to True (alias for --{cli_name})",
+            )
+
+            # Add negation argument for alias
+            target_parser.add_argument(
+              f"--no-{alias}",
+              dest=name,
+              default=None,
+              action="store_const",
+              const=False,
+              help=f"set {name} to False (alias for --no-{cli_name})",
+            )
+
+          elif origin is list:
+            # List alias: --alias VALUE appends values
+            element_type = get_args(concrete_type)[0]
+            target_parser.add_argument(
+              f"--{alias}",
+              dest=name,
+              default=None,
+              action="append",
+              type=element_type,
+              help=f"append to {name} (can be used multiple times, alias for --{cli_name})",
+            )
+
+            # Add clear argument for alias
+            target_parser.add_argument(
+              f"--no-{alias}",
+              dest=name,
+              default=None,
+              action="store_const",
+              const=[],  # Empty list marker
+              help=f"clear {name} (alias for --no-{cli_name})",
+            )
+
+          else:
+            # Scalar alias: --alias VALUE
+            target_parser.add_argument(
+              f"--{alias}",
+              dest=name,
+              default=None,
+              type=concrete_type,
+              help=f"provide {name} (alias for --{cli_name})",
+            )
 
   def get_args(self, args: list[str] | None = None) -> dict[str, Any]:
     """
@@ -449,13 +552,15 @@ def _reset_factories() -> None:
   For testing only - ensures test isolation by resetting global state.
   Creates a fresh default parser.
   """
-  global _factories, _configured_parsers, _default_parser, _sub_parsers, _registered_field_owners
+  global _factories, _configured_parsers, _default_parser, _sub_parsers
+  global _registered_field_owners, _registered_arg_names
   # Clear dictionaries/lists in-place instead of reassigning
   # This ensures all module references see the changes
   _factories.clear()
   _configured_parsers.clear()
   _sub_parsers.clear()
   _registered_field_owners.clear()
+  _registered_arg_names.clear()
   # Create a new parser by reassigning (this is unavoidable for parser objects)
   _default_parser = argparse.ArgumentParser()
 
