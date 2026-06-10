@@ -315,18 +315,70 @@ class Factory:
           cli_name = f"{self._nested_prefix}-{cli_name}"
           name = f"{self._nested_prefix}.{name}"
 
-        arg = functools.partial(
-          target_parser.add_argument,
-          f"--{cli_name}",
-          dest=name,  # name with dots
-          default=None,  # Use None so TOML values aren't overridden
-          help=f"provide {name}",
-        )
-        # complete partial: boolean switch of store value
+        # Detect list types
+        origin = get_origin(concrete_type)
+
         if concrete_type is bool:
-          _ = arg(action="store_true")
+          # Boolean field: --field sets to True, --no-field sets to False
+          arg = functools.partial(
+            target_parser.add_argument,
+            f"--{cli_name}",
+            dest=name,
+            default=None,
+            action="store_true",
+            help=f"set {name} to True",
+          )
+          _ = arg()
+
+          # Add negation argument
+          arg_no = functools.partial(
+            target_parser.add_argument,
+            f"--no-{cli_name}",
+            dest=name,
+            default=None,
+            action="store_const",
+            const=False,
+            help=f"set {name} to False",
+          )
+          _ = arg_no()
+
+        elif origin is list:
+          # List field: --field VALUE appends values
+          element_type = get_args(concrete_type)[0]
+          arg = functools.partial(
+            target_parser.add_argument,
+            f"--{cli_name}",
+            dest=name,
+            default=None,
+            action="append",
+            type=element_type,
+            help=f"append to {name} (can be used multiple times)",
+          )
+          _ = arg()
+
+          # Add clear argument
+          arg_no = functools.partial(
+            target_parser.add_argument,
+            f"--no-{cli_name}",
+            dest=name,
+            default=None,
+            action="store_const",
+            const=[],  # Empty list marker
+            help=f"clear {name} (set to empty list)",
+          )
+          _ = arg_no()
+
         else:
-          _ = arg(type=concrete_type)
+          # Default: scalar field with type conversion
+          arg = functools.partial(
+            target_parser.add_argument,
+            f"--{cli_name}",
+            dest=name,
+            default=None,
+            type=concrete_type,
+            help=f"provide {name}",
+          )
+          _ = arg()
 
   def get_args(self, args: list[str] | None = None) -> dict[str, Any]:
     """
