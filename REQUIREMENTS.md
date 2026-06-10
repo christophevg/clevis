@@ -97,6 +97,16 @@ Support for accumulative CLI arguments for list types and negative boolean flags
 - [ ] R113: CLI values merge with TOML values (append semantics, not replace)
 - [ ] R114: Works for all list types (`list[str]`, `list[int]`, etc.)
 
+### CLI Argument Aliases (P2-012, issue #13)
+
+Support alternative CLI argument names for config fields.
+
+- [ ] R115: Config fields support alternative CLI argument names via `metadata={"cli_aliases": ["alias"]}`
+- [ ] R116: Multiple aliases supported per field
+- [ ] R117: Aliases replace entire argument name including prefixes (nested: `tools.packages` with alias `with` creates `--tools-with`)
+- [ ] R118: Aliases merge same as original argument name
+- [ ] R119: Error raised if alias conflicts with existing field name
+
 ## Non-Functional Requirements
 
 ### Code Quality
