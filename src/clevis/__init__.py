@@ -347,6 +347,9 @@ def _merge_list_args(
   - [] (--no-field) → clear, result is []
   - [...] (--field X --field Y) → TOML base + CLI values
 
+  Note: This function modifies `cli_args` and `toml_cfg` in-place,
+  removing merged list fields from `cli_args` and updating values in `toml_cfg`.
+
   Args:
     clz: The dataclass type
     cli_args: CLI arguments (dotted keys)
@@ -379,6 +382,10 @@ def _merge_list_args(
       # --field X --field Y: append to TOML base
       toml_value = scope.get(final_key, [])
       if not isinstance(toml_value, list):
+        logger.warning(
+          f"Expected list for {field_name}, got {type(toml_value).__name__}. "
+          f"Converting to empty list."
+        )
         toml_value = []
       scope[final_key] = toml_value + cli_value
       # Remove from cli_args so apply_to_dict doesn't override
@@ -626,3 +633,4 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+

@@ -396,6 +396,83 @@ When both ``--field`` and ``--no-field`` are provided, the **last one wins**:
    python app.py --packages a --packages b --no-packages
    # Result: packages = []
 
+**Security considerations:**
+
+.. note::
+
+   **List size limits:** For security-sensitive applications, consider validating
+   list sizes in your configuration schema using ``__post_init__`` or custom
+   validators. This prevents resource exhaustion from excessively large lists
+   passed via CLI arguments:
+
+   .. code-block:: python
+
+      @dataclass
+      class Config:
+          packages: list[str] = field(default_factory=list)
+
+          def __post_init__(self):
+              if len(self.packages) > 100:
+                  raise ValueError(f"Too many packages: {len(self.packages)} > 100")
+
+.. note::
+
+   **Path validation for list[Path]:** When using ``list[Path]`` fields, validate
+   paths in ``__post_init__`` to prevent directory traversal attacks:
+
+   .. code-block:: python
+
+      from pathlib import Path
+      from dataclasses import dataclass, field
+
+      @dataclass
+      class Config:
+          paths: list[Path] = field(default_factory=list)
+
+          def __post_init__(self):
+              for path in self.paths:
+                  if ".." in str(path):
+                      raise ValueError(f"Path traversal not allowed: {path}")
+                  if not path.is_absolute():
+                      raise ValueError(f"Only absolute paths allowed: {path}")
+
+.. note::
+
+   **Empty string handling:** Empty strings in list fields are preserved as-is.
+   If you need to reject empty strings, add validation in ``__post_init__``:
+
+   .. code-block:: python
+
+      @dataclass
+      class Config:
+          packages: list[str] = field(default_factory=list)
+
+          def __post_init__(self):
+              empty = [p for p in self.packages if not p]
+              if empty:
+                  raise ValueError("Empty package names not allowed")
+
+**Boolean merge behavior:**
+
+For boolean fields, ``--no-field`` overrides any TOML value:
+
+.. code-block:: toml
+
+   # myapp.toml
+   debug = true
+
+.. code-block:: bash
+
+   # CLI --no-debug overrides TOML
+   python app.py --no-debug
+   # Result: debug = False
+
+   # CLI --debug sets to True
+   python app.py --debug
+   # Result: debug = True
+
+This explicit control allows you to override TOML configuration from the command line.
+
 Overriding Defaults
 ~~~~~~~~~~~~~~~~~~~
 
