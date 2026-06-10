@@ -77,6 +77,11 @@ config = get_config(AppConfig, name="app")
 
 **Returns:** Instance of the dataclass with merged configuration
 
+**Merge Behavior:**
+- Scalar fields: CLI values override TOML values completely
+- List fields: CLI values **append** to TOML values (TOML base + CLI additions)
+- Use `--no-field` to clear a list field and start fresh
+
 **Raises:**
 - `ConfigError` — Missing required fields or wrong types
 - `SecurityError` — Security checks fail (when `security` action is `REJECT`)
@@ -463,10 +468,46 @@ Nested dataclasses become dashed arguments:
 python app.py --database-host localhost --database-port 5432 --debug
 ```
 
-Boolean fields use `--flag` (store_true):
+**Boolean fields** use `--flag` (store_true) and `--no-flag` (store_false):
 
 ```bash
-python app.py --debug  # Sets debug=True
+python app.py --debug        # Sets debug=True
+python app.py --no-debug     # Sets debug=False
+```
+
+**List fields** support append behavior with `--field value` (can be repeated):
+
+```bash
+# Append values to list
+python app.py --packages pkgq --packages c3 --packages agent
+
+# Clear list (set to empty)
+python app.py --no-packages
+
+# Combine with TOML: TOML values come first, then CLI values
+# TOML: packages = ["base"]
+# CLI: --packages plugin1 --packages plugin2
+# Result: packages = ["base", "plugin1", "plugin2"]
+```
+
+**List types supported:**
+
+```python
+@dataclass
+class Config:
+  packages: list[str] = field(default_factory=list)
+  ports: list[int] = field(default_factory=list)
+  paths: list[Path] = field(default_factory=list)
+```
+
+```bash
+# All list types work with append
+python app.py --packages pkgq --packages c3
+python app.py --ports 8080 --ports 8081
+python app.py --paths /var/log --paths /var/run
+
+# Clear any list type
+python app.py --no-packages --no-ports --no-paths
 ```
 
 ### Factory Pattern for Multi-Module Apps
@@ -807,6 +848,43 @@ Clevis automatically selects the best available TOML parser:
 - `tomlev` — Environment variables with defaults
 
 ## Version Notes
+
+### 0.4.0
+
+**New Features:**
+- **List-Append CLI Arguments**: List fields now support append behavior from CLI
+  - Repeat `--field value` to append values: `--packages pkgq --packages c3`
+  - Use `--no-field` to clear lists: `--no-packages` sets to `[]`
+  - Merge behavior: CLI values append to TOML values (not replace)
+  - Type conversion: All list types supported (`list[str]`, `list[int]`, `list[Path]`, etc.)
+- **Boolean Negation Flags**: Boolean fields support explicit False via `--no-field`
+  - `--debug` sets to True, `--no-debug` sets to False
+  - Last flag wins: `--debug --no-debug` → False
+  - Complements existing `--flag` behavior for complete control
+
+**Migration from 0.3.x:**
+
+No breaking changes. The new list-append and boolean negation features are additive:
+
+```python
+# Before (0.3.x) - Boolean only had store_true
+python app.py --debug  # Sets to True
+# No way to set False from CLI
+
+# After (0.4.0) - Explicit False support
+python app.py --no-debug  # Sets to False
+python app.py --debug --no-debug  # Last wins → False
+
+# Before (0.3.x) - List fields not available from CLI
+# After (0.4.0) - List fields support append
+python app.py --packages pkg1 --packages pkg2
+# Result: ["pkg1", "pkg2"]
+
+# TOML + CLI merging
+# TOML: packages = ["base"]
+# CLI: --packages plugin1 --packages plugin2
+# Result: ["base", "plugin1", "plugin2"]
+```
 
 ### 0.3.0
 

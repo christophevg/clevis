@@ -76,6 +76,8 @@ python app.py --name "Custom App" --port 9000
 | **TOML loading** | Auto-discover config files in user/project directories | `get_config(Config, name="myapp")` |
 | **Environment vars** | `${VAR}` interpolation in TOML files | `pip install clevis[envtoml]` |
 | **CLI arguments** | Auto-generate argparse from dataclass fields | `python app.py --database-host localhost` |
+| **Boolean flags** | `--flag` for True, `--no-flag` for False | `python app.py --debug` / `--no-debug` |
+| **List append** | Repeat `--field val` to append to lists | `python app.py --packages pkg --packages c3` |
 | **Layered config** | Defaults < User < Project < CLI | Priority-based merging |
 | **Nested configs** | Hierarchical configuration with nested dataclasses | `[database] host = "localhost"` |
 | **Subcommands** | Build multi-command CLI apps | `@configclass(cmd="build")` |
@@ -177,7 +179,20 @@ python app.py --name "Custom App" --debug
 python app.py --database-host localhost --database-port 5433
 
 # Boolean flags
-python app.py --debug  # Sets debug=True
+python app.py --debug        # Sets debug=True
+python app.py --no-debug     # Sets debug=False
+
+# List fields (append values)
+python app.py --packages pkgq --packages c3 --packages agent
+# Result: packages = ["pkgq", "c3", "agent"]
+
+# Clear lists
+python app.py --no-packages  # Sets packages = []
+
+# Lists merge with TOML: TOML values first, then CLI values
+# TOML: packages = ["base"]
+# CLI: --packages plugin1 --packages plugin2
+# Result: packages = ["base", "plugin1", "plugin2"]
 ```
 
 ### 4. Configuration Priority
