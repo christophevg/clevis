@@ -34,22 +34,6 @@ Plugin configuration support for architectures like Yoker.
     - Coverage for new code ≥90%
     - Existing tests continue to pass
 
-- [ ] **P2-012: Add CLI argument aliases**
-  - Allow config fields to have alternative CLI argument names (aliases)
-  - Support multiple aliases per field via metadata: `field(metadata={"cli_aliases": ["with", "add"]})`
-  - Aliases replace entire argument name including prefixes
-  - Merge behavior: aliases treated as original argument name
-  - Conflict resolution: raise Error if alias conflicts with existing field
-  - Let argparse handle help text display
-  - **GitHub Issue**: #13
-  - **Satisfies**: R115 (new requirement)
-  - **Acceptance**:
-    - `packages: list[str] = field(metadata={"cli_aliases": ["with"]})` creates `--packages` and `--with`
-    - `--with pkgq --packages c3` works same as `--packages pkgq --packages c3`
-    - Nested: `tools.packages` with alias `with` creates `--tools-packages` and `--tools-with`
-    - Error raised if alias conflicts with existing field name
-    - Tests cover: single alias, multiple aliases, nested configs, conflict detection
-
 ### Phase 3: Polish (P3 - Medium)
 
 Optional improvements for future releases.
@@ -116,6 +100,22 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - **No owner, no demand, not scheduled**
 
 ## Done
+
+- [x] **P2-012: Add CLI argument aliases** ✅ 2026-06-10 (PR #17)
+  - Allow config fields to have alternative CLI argument names (aliases)
+  - Support multiple aliases per field via metadata: `field(metadata={"cli_aliases": ["with", "add"]})`
+  - Aliases replace entire argument name including prefixes
+  - Merge behavior: aliases treated as original argument name
+  - Conflict resolution: raise Error if alias conflicts with existing field
+  - Let argparse handle help text display
+  - **GitHub Issue**: #13
+  - **Satisfies**: R115 (new requirement)
+  - **Acceptance**:
+    - `packages: list[str] = field(metadata={"cli_aliases": ["with"]})` creates `--packages` and `--with`
+    - `--with pkgq --packages c3` works same as `--packages pkgq --packages c3`
+    - Nested: `tools.packages` with alias `with` creates `--tools-packages` and `--tools-with`
+    - Error raised if alias conflicts with existing field name
+    - Tests cover: single alias, multiple aliases, nested configs, conflict detection
 
 - [x] **P2-008: Update @configclass decorator** ✅ 2026-06-10 (PR #16)
   - Add validation: `config` parameter requires `cmd` parameter
