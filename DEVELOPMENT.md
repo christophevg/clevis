@@ -61,8 +61,7 @@ Result converted to dataclass instance via dacite.
 ## Key Patterns
 
 ### 1. Factory Pattern
-
-Singleton factory per config class enables multi-module coordination:
+Singleton factory per config class enables multi-module coordination.
 
 ```python
 @configclass
@@ -70,42 +69,30 @@ class AppConfig:
   name: str = "default"
 
 factory = get_factory(AppConfig)
-factory.prefix = "app1"  # CLI args: --app1-name
+factory.prefix = "app1"
 factory.parser = shared_parser
-
 config = get_config(AppConfig)
 ```
 
-Key concepts:
-- One factory per config class (singleton)
-- Lazy configuration (parser setup on first get_config())
-- Test isolation via `_reset_factories()`
-
 ### 2. Decorator Pattern (@configclass)
-
-Combines @dataclass with factory registration:
+Combines @dataclass with factory registration. Note: `config` parameter requires `cmd` parameter.
 
 ```python
 @configclass
 class Config:
   name: str = "default"
 
-# With subcommands:
 @configclass(cmd="check", help="Run diagnostics", aliases=["c"])
 class CheckConfig:
   verbose: bool = False
 
-# With TOML override:
 @configclass(cmd="cli", config="client")
 class CliConfig:
   server_url: str = "http://localhost"
 ```
 
-Note: `config` parameter requires `cmd` parameter (TOML section extraction only makes sense with subcommands).
-
 ### 3. Parser Protocol
-
-Extensibility via structural typing:
+Extensibility via structural typing.
 
 ```python
 class Parser(Protocol):
@@ -113,20 +100,12 @@ class Parser(Protocol):
   def add_subparsers(self, **kwargs) -> SubParser: ...
   def parse_args(self, args=None) -> Namespace: ...
 
-# Use custom parser
 get_factory(Config).parser = CustomParser()
 ```
 
 ### 4. TOML + CLI + Environment Merging
+Priority (highest to lowest): CLI arguments → Environment variables → Project TOML → User TOML → Dataclass defaults
 
-Priority (highest to lowest):
-1. CLI arguments
-2. Environment variables (envtoml/tomlev)
-3. Project TOML
-4. User TOML
-5. Dataclass defaults
-
-Implementation:
 ```python
 config_dict = {}
 config_dict.update(load_toml("~/.myapp.toml"))
@@ -137,24 +116,16 @@ return from_dict(data_class=Config, data=config_dict)
 ```
 
 ### 5. List-Append Behavior
-
-CLI list values append to TOML values:
+CLI list values append to TOML values. Use `--no-field` to clear.
 
 ```bash
 # TOML: packages = ["base"]
 # CLI: --packages plugin1 --packages plugin2
 # Result: packages = ["base", "plugin1", "plugin2"]
-
-# To clear and replace:
-# CLI: --no-packages --packages only-this
-# Result: packages = ["only-this"]
 ```
 
-Implementation uses argparse `action="append"` and `const=[]` for --no-field arguments.
-
 ### 6. Dynamic Field Registration
-
-Plugin architecture with runtime field injection:
+Plugin architecture with runtime field injection. Requirements: parent config must NOT be frozen; registration must happen before get_config().
 
 ```python
 @dataclass
@@ -166,14 +137,7 @@ class PkgqToolConfig:
   enabled: bool = True
 
 register_field(ToolsConfig, "pkgq", PkgqToolConfig)
-# Now: ToolsConfig has pkgq field
-# TOML: [tools.pkgq] works
-# CLI: --tools-pkgq-enabled works
 ```
-
-Requirements:
-- Parent config must NOT be frozen
-- Registration must happen before get_config()
 
 ## Important Design Decisions
 
@@ -316,35 +280,17 @@ class TestFeatureName:
 
   def test_basic_case(self):
     """Test description."""
-    # Arrange
     config = Config(name="test")
-
-    # Act
     result = get_config(Config)
-
-    # Assert
     assert result.name == "test"
 ```
 
 ### Common Patterns
 
-**Fixtures**:
-```python
-@pytest.fixture
-def temp_config_file():
-  """Create a temporary TOML config file."""
-  with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-    f.write('[database]\nhost = "localhost"\n')
-    yield f.name
-  os.unlink(f.name)
-```
-
-**Global State Reset**:
+**Global State Reset** (essential for test isolation):
 ```python
 def test_factory_isolation():
-  """Test that factories are properly isolated."""
   from clevis import _reset_factories
-
   _reset_factories()  # Clean slate before test
   # ... test code ...
   _reset_factories()  # Clean up after test
@@ -353,9 +299,7 @@ def test_factory_isolation():
 **CLI Arguments**:
 ```python
 def test_cli_args():
-  """Test CLI argument parsing."""
   from clevis import _reset_factories
-
   _reset_factories()
 
   @dataclass
@@ -368,142 +312,40 @@ def test_cli_args():
   assert config.debug is True
 ```
 
-**Security**:
-```python
-def test_insecure_file_permissions():
-  """Test that insecure file permissions are rejected."""
-  from clevis import SecurityAction, SecurityError
-
-  with tempfile.NamedTemporaryFile(mode="w", suffix=".toml") as f:
-    f.write('name = "test"')
-    f.flush()
-    os.chmod(f.name, 0o644)  # World-readable
-
-    with pytest.raises(SecurityError):
-      get_config(Config, name=f.name[:-5])
-```
-
-**Dynamic Registration**:
-```python
-def test_register_field():
-  """Test dynamic field registration."""
-  from clevis import _reset_factories
-
-  _reset_factories()
-
-  @dataclass
-  class ParentConfig:
-    existing: str = "default"
-
-  @dataclass
-  class ChildConfig:
-    value: int = 42
-
-  register_field(ParentConfig, "child", ChildConfig)
-
-  config = ParentConfig()
-  assert hasattr(config, "child")
-  assert config.child.value == 42
-```
-
 ### Coverage Expectations
 
 - **Target**: 80%+ coverage
-- **Focus Areas**:
-  - Configuration loading (get_config)
-  - CLI argument generation (Factory._configure_fields)
-  - TOML parser selection (_get_toml_parser)
-  - Security validation (_check_file_permissions)
-  - List-append merging (_merge_list_args)
+- **Focus Areas**: Configuration loading, CLI argument generation, TOML parser selection, security validation, list-append merging
 
 ## Common Tasks
 
 ### Add New Configuration Field
 
 ```python
-# 1. Add to dataclass
 @dataclass
 class Config:
   name: str = "default"
-  new_field: str = "value"  # Add here
+  new_field: str = "value"
 
-# 2. Update TOML examples
-# myapp.toml
-name = "MyApp"
-new_field = "custom"
-
-# 3. Test
 def test_new_field():
   config = get_config(Config, args=["--new-field", "custom"])
   assert config.new_field == "custom"
-```
-
-### Add New CLI Argument Type
-
-```python
-# In Factory._configure_fields()
-if concrete_type is NewType:
-  # Custom argument handling
-  target_parser.add_argument(...)
 ```
 
 ### Add New Parser
 
 ```python
 class CustomParser:
-  """Custom parser implementing Parser protocol."""
-
   def add_argument(self, *name_or_flags, **kwargs):
-    # Implementation
     pass
 
   def parse_args(self, args=None):
-    # Implementation
     return Namespace(**parsed)
 
-# Use custom parser
 custom_parser = CustomParser()
 get_factory(Config).parser = custom_parser
 config = get_config(Config)
 ```
-
-### Debug Configuration Issues
-
-1. **Check TOML files**:
-   ```bash
-   ls -la ~/.myapp.toml ./myapp.toml
-   # Should be owner-only: -rw------- (600)
-   ```
-
-2. **Enable logging**:
-   ```python
-   import logging
-   logging.basicConfig(level=logging.DEBUG)
-   logger = logging.getLogger("clevis")
-   ```
-
-3. **Inspect factory**:
-   ```python
-   from clevis import get_factory
-
-   factory = get_factory(Config)
-   print(f"Prefix: {factory.prefix}")
-   print(f"Configured: {factory._configured}")
-   ```
-
-4. **Check argument names**:
-   ```python
-   parser = argparse.ArgumentParser()
-   get_factory(Config).parser = parser
-   get_config(Config)
-   parser.print_help()
-   ```
-
-5. **Test isolation**:
-   ```python
-   from clevis import _reset_factories
-   _reset_factories()  # Reset before test
-   ```
 
 ## Reference
 
@@ -537,21 +379,4 @@ config = get_config(Config)
 - **Python**: 3.10, 3.11, 3.12
 - **Type Hints**: Strict typing with mypy
 
-## Summary
 
-Clevis provides:
-1. **Layered Configuration** - Multiple sources with clear precedence
-2. **Factory Pattern** - Coordinate across modules
-3. **Dynamic Registration** - Plugin architectures
-4. **Security** - File permission validation
-5. **Developer Experience** - Auto-generated CLI, helpful errors
-
-Module organization:
-- `__init__.py` - Orchestration
-- `factory.py` - CLI generation
-- `configclass.py` - Decorators
-- `registration.py` - Plugin support
-
-For questions or issues:
-- **GitHub Issues**: https://github.com/christophevg/clevis/issues
-- **Documentation**: https://clevis.readthedocs.io
