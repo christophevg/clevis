@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypedDict, TypeVar
+from typing import Any, TypedDict, TypeVar, get_origin
 
 from dacite import Config, from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
@@ -334,6 +334,87 @@ def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   return cmd
 
 
+def _merge_list_args(
+  clz: type,
+  cli_args: dict[str, Any],
+  toml_cfg: dict[str, Any],
+) -> None:
+  """
+  Merge CLI list arguments with TOML configuration in-place.
+
+  For list fields:
+  - None (no CLI arg) → keep TOML value
+  - [] (--no-field) → clear, result is []
+  - [...] (--field X --field Y) → TOML base + CLI values
+
+  Args:
+    clz: The dataclass type
+    cli_args: CLI arguments (dotted keys)
+    toml_cfg: TOML configuration (modified in-place)
+  """
+  # Get all list fields in the config class
+  list_fields = _get_list_fields(clz, [])
+
+  # Merge list fields
+  for field_name in list_fields:
+    cli_value = cli_args.get(field_name)
+
+    if cli_value is None:
+      # No CLI argument for this field - keep TOML value
+      continue
+
+    # Navigate to the nested location in toml_cfg
+    parts = field_name.split(".")
+    final_key = parts.pop()
+    scope = toml_cfg
+    for step in parts:
+      if step not in scope:
+        scope[step] = {}
+      scope = scope[step]
+
+    if isinstance(cli_value, list) and len(cli_value) == 0:
+      # --no-field: empty list marker, clear the field
+      scope[final_key] = []
+    elif isinstance(cli_value, list):
+      # --field X --field Y: append to TOML base
+      toml_value = scope.get(final_key, [])
+      if not isinstance(toml_value, list):
+        toml_value = []
+      scope[final_key] = toml_value + cli_value
+      # Remove from cli_args so apply_to_dict doesn't override
+      del cli_args[field_name]
+
+
+def _get_list_fields(clz: type, path: list[str]) -> list[str]:
+  """
+  Recursively find all list fields in a dataclass.
+
+  Args:
+    clz: The dataclass type to inspect
+    path: Current path in the hierarchy (used for recursion)
+
+  Returns:
+    List of dotted field names that are list types
+  """
+  result = []
+  for f in fields(clz):
+    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+
+    if is_dataclass(concrete_type):
+      # Recurse into nested dataclass
+      nested_fields = _get_list_fields(concrete_type, path + [f.name])
+      result.extend(nested_fields)
+    else:
+      # Check if this is a list field
+      origin = get_origin(concrete_type)
+      if origin is list:
+        # Add dotted path to this field
+        field_path = ".".join(path + [f.name])
+        result.append(field_path)
+
+  return result
+
+
 T = TypeVar("T")
 
 
@@ -447,7 +528,11 @@ def get_config(
 
   # Parse CLI args if requested and merge them into the config
   if cli or args is not None:
-    apply_to_dict(get_factory(clz).get_args(args), cfg)
+    cli_args = get_factory(clz).get_args(args)
+    # Separate list args and merge them with TOML values
+    _merge_list_args(clz, cli_args, cfg)
+    # Apply non-list args (they override TOML values)
+    apply_to_dict(cli_args, cfg)
 
   # Convert dict to dataclass
   # Use cast=[tuple, set] to convert TOML lists to tuples and sets
