@@ -9,14 +9,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 Plugin configuration support for architectures like Yoker.
 
 
-- [ ] **P2-014: Move import to module level**
-  - Move `import re` from inside exception handler at `__init__.py:591` to top of file
-  - Import statements should be at module level for clarity and performance
-  - **Acceptance**:
-    - `import re` at module level in `__init__.py`
-    - Code in exception handler uses the module-level import
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
 
 - [ ] **P2-015: Extract nested function to module level**
   - Extract `register_arg_name` nested function from `factory.py:332-364` to module level
@@ -248,6 +240,15 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-014: Move import to module level** ✅ 2026-06-11 (PR #20)
+  - Move `import re` from inside exception handler at `__init__.py:594` to top of file
+  - Import statements should be at module level for clarity and performance
+  - **Acceptance**:
+    - `import re` at module level in `__init__.py`
+    - Code in exception handler uses the module-level import
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
 
 - [x] **P3-007: API improvements for list-append (API review)** ✅ 2026-06-10 (PR #18)
   - Improve help text to include type information: "append {type} to {name} list"
