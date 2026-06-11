@@ -1,7 +1,35 @@
 """Factory module for configuration management.
 
-Provides the Factory class for managing configuration dataclass parsers
-and CLI argument generation.
+This module implements the Factory pattern for Clevis configuration classes,
+providing singleton factories that manage parser configuration and CLI argument
+generation.
+
+Architecture:
+  Factory (singleton per config class)
+    ├── Manages argparse parser configuration
+    ├── Generates CLI arguments from dataclass fields
+    ├── Supports nested configuration with prefix propagation
+    └── Coordinates across multiple modules via shared parser
+
+Key Components:
+  - Factory: Singleton per config class, manages parser setup
+  - Parser/SubParser protocols: Interface for argparse-compatible parsers
+  - ParserRegistry: Tracks configured parsers and prevents argument conflicts
+
+Relationships:
+  - configclass.py: Uses get_factory() to register decorated classes
+  - registration.py: Uses get_factory() to add dynamic fields
+  - __init__.py: Uses Factory.get_args() and _ensure_configured()
+
+Lazy Configuration:
+  Parser configuration is deferred until get_config() is called, allowing
+  orchestration code to customize prefixes and parsers before CLI parsing.
+
+  Example:
+    factory = get_factory(AppConfig)
+    factory.prefix = "app1"      # CLI args: --app1-name, --app1-debug
+    factory.parser = custom_parser  # Use custom parser
+    config = get_config(AppConfig)  # Parser configured here
 """
 
 import argparse
@@ -710,3 +738,4 @@ def get_factory(clz: type) -> Factory:
     # create default factory
     _factories[clz] = Factory(clz)
     return _factories[clz]
+
