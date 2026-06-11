@@ -10,17 +10,6 @@ Plugin configuration support for architectures like Yoker.
 
 
 
-- [ ] **P2-009: Add comprehensive documentation and examples**
-  - Update `PACKAGE.md` with all 6 use cases
-  - Add `examples/plugin.py` demonstrating dynamic registration
-  - Add `examples/subcommands.py` demonstrating subcommands with TOML override
-  - Update `README.md` with plugin configuration section
-  - **Satisfies**: R108 (new requirement)
-  - **Acceptance**:
-    - All 6 use cases documented with code examples
-    - Plugin example runs successfully
-    - README includes plugin configuration guide
-  - **Reference**: `analysis/dynamic-registration.md`
 
 - [ ] **P2-010: Add tests for dynamic field registration**
   - Test `register_field()` basic functionality
@@ -201,6 +190,19 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-009: Add comprehensive documentation and examples** ✅ 2026-06-11 (PR #25)
+  - Update `PACKAGE.md` with all 6 use cases
+  - Add `examples/plugin.py` demonstrating dynamic registration
+  - Add `examples/subcommands.py` demonstrating subcommands with TOML override
+  - Update `README.md` with plugin configuration section
+  - **Satisfies**: R108 (new requirement)
+  - **Acceptance**:
+    - All 6 use cases documented with code examples
+    - Plugin example runs successfully
+    - README includes plugin configuration guide
+    - Documentation condensed per feedback (README: 334 lines, PACKAGE: 481 lines)
+  - **Reference**: `analysis/dynamic-registration.md`
 
 - [x] **P2-018: Remove misleading empty try/finally** ✅ 2026-06-11 (PR #24)
   - Remove empty try/finally blocks that suggested cleanup was needed
@@ -448,3 +450,4 @@ Tasks that were reviewed and rejected with documented rationale.
 - [x] **P1-001: Create initial git commit** ✅ 2026-05-30
   - Initial commit with source, tests, docs, configuration
   - **Satisfies**: R67
+
