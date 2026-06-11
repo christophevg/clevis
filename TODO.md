@@ -10,16 +10,6 @@ Plugin configuration support for architectures like Yoker.
 
 
 
-- [ ] **P2-018: Remove misleading empty try/finally**
-  - Fix empty try/finally blocks at `__init__.py:501-511`
-  - Pattern `try: ... finally: # fd is closed by _load_toml_from_fd` is misleading
-  - Remove try/finally and add assertion comment instead
-  - **Acceptance**:
-    - Misleading try/finally removed
-    - Clear comment or assertion about file descriptor handling
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
-
 - [ ] **P2-009: Add comprehensive documentation and examples**
   - Update `PACKAGE.md` with all 6 use cases
   - Add `examples/plugin.py` demonstrating dynamic registration
@@ -211,6 +201,15 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-018: Remove misleading empty try/finally** ✅ 2026-06-11 (PR #24)
+  - Remove empty try/finally blocks that suggested cleanup was needed
+  - Add clear comments explaining fd ownership transfer via os.fdopen()
+  - **Acceptance**:
+    - Misleading try/finally removed
+    - Clear comments about file descriptor handling
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
 
 - [x] **P2-017: Extract TOML extension constants** ✅ 2026-06-11 (PR #23)
   - Extract magic strings for `.toml` and `.{name}.toml` to constants
