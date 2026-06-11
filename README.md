@@ -68,24 +68,22 @@ Override with CLI:
 python app.py --name "Custom App" --port 9000
 ```
 
-## Features Overview
+## Features
 
 | Feature | Description | Example |
 |---------|-------------|---------|
-| **Dataclass schemas** | Type-safe configuration with Python dataclasses | `@dataclass class Config: ...` |
-| **TOML loading** | Auto-discover config files in user/project directories | `get_config(Config, name="myapp")` |
-| **Environment vars** | `${VAR}` interpolation in TOML files | `pip install clevis[envtoml]` |
-| **CLI arguments** | Auto-generate argparse from dataclass fields | `python app.py --database-host localhost` |
+| **Dataclass schemas** | Type-safe configuration | `@dataclass class Config: ...` |
+| **TOML loading** | Auto-discover config files | `get_config(Config, name="myapp")` |
+| **Environment vars** | `${VAR}` interpolation | `pip install clevis[envtoml]` |
+| **CLI arguments** | Auto-generate argparse | `python app.py --database-host localhost` |
 | **Boolean flags** | `--flag` for True, `--no-flag` for False | `python app.py --debug` / `--no-debug` |
-| **List append** | Repeat `--field val` to append to lists | `python app.py --packages pkg --packages c3` |
+| **List append** | Repeat `--field val` | `python app.py --packages pkg --packages c3` |
 | **Layered config** | Defaults < User < Project < CLI | Priority-based merging |
-| **Nested configs** | Hierarchical configuration with nested dataclasses | `[database] host = "localhost"` |
-| **Subcommands** | Build multi-command CLI apps | `@configclass(cmd="build")` |
-| **Factory pattern** | Multi-module orchestration with shared parsers | `get_factory(Config).prefix = "app1"` |
-| **Dynamic registration** | Plugin architecture with runtime field injection | `register_field(Parent, "plugin", PluginConfig)` |
-| **Security** | Validate file permissions to protect credentials | `SecurityAction.REJECT` (default) |
-| **Custom validation** | Post-initialization validation with `__post_init__` | `def __post_init__(self): ...` |
-| **Library mode** | Use Clevis without CLI argument parsing | `get_config(Config, cli=False)` |
+| **Nested configs** | Hierarchical configuration | `[database] host = "localhost"` |
+| **Subcommands** | Multi-command CLI apps | `@configclass(cmd="build")` |
+| **Factory pattern** | Multi-module orchestration | `get_factory(Config).prefix = "app1"` |
+| **Dynamic registration** | Plugin architecture | `register_field(Parent, "plugin", PluginConfig)` |
+| **Security** | File permission validation | `SecurityAction.REJECT` (default) |
 
 ## Installation
 
@@ -96,7 +94,7 @@ Choose your TOML parser based on needs:
 | *(none)* | Stdlib `tomllib` | Python 3.11+, minimal deps |
 | [`tomli`][tomli] | Pure Python TOML | Python 3.10 compatibility |
 | [`envtoml`][envtoml] | `${VAR}` interpolation | Environment-based config |
-| [`tomlev`][tomlev] | `${VAR\|default}` syntax | Env vars with defaults |
+| [`tomlev`][tomlev] | `${VAR|default}` syntax | Env vars with defaults |
 
 ```bash
 # Python 3.11+ - no extras needed
@@ -107,95 +105,11 @@ pip install clevis[tomli]
 
 # Environment variable support
 pip install clevis[envtoml]
-
-# Env vars with defaults
-pip install clevis[tomlev]
-```
-
-**Development installation:**
-
-```bash
-git clone https://github.com/christophevg/clevis.git
-cd clevis
-make env-dev  # Creates development environment
 ```
 
 ## Core Concepts
 
-### 1. Configuration Schemas
-
-Define your configuration structure using Python dataclasses:
-
-```python
-from dataclasses import dataclass, field
-
-@dataclass
-class DatabaseConfig:
-    host: str = "localhost"
-    port: int = 5432
-    user: str | None = None
-    password: str | None = None
-
-@dataclass
-class AppConfig:
-    name: str = "MyApp"
-    debug: bool = False
-    database: DatabaseConfig = field(default_factory=DatabaseConfig)
-```
-
-**Key points:**
-- All fields should have defaults (for fallback)
-- Use `field(default_factory=...)` for nested dataclasses
-- Optional fields use `str | None = None`
-
-### 2. TOML Files
-
-Create TOML files matching your dataclass structure:
-
-```toml
-name = "Production App"
-debug = false
-
-[database]
-host = "db.example.com"
-port = 5432
-user = "appuser"
-password = "${DB_PASSWORD}"  # Environment variable
-```
-
-**Auto-discovered locations:**
-- User-level: `~/.{name}.toml` (personal defaults)
-- Project-level: `./{name}.toml` (checked into VCS)
-
-### 3. CLI Arguments
-
-Clevis auto-generates CLI arguments from your dataclass:
-
-```bash
-# Flat fields
-python app.py --name "Custom App" --debug
-
-# Nested fields (dots become dashes)
-python app.py --database-host localhost --database-port 5433
-
-# Boolean flags
-python app.py --debug        # Sets debug=True
-python app.py --no-debug     # Sets debug=False
-
-# List fields (append values)
-python app.py --packages pkgq --packages c3 --packages agent
-# Result: packages = ["pkgq", "c3", "agent"]
-
-# Clear lists
-python app.py --no-packages  # Sets packages = []
-
-# Lists merge with TOML: TOML values first, then CLI values
-# TOML: packages = ["base"]
-# CLI: --packages plugin1 --packages plugin2
-# Result: packages = ["base", "plugin1", "plugin2"]
-```
-
-### 4. Configuration Priority
+### Configuration Priority
 
 Values are merged in order (highest priority wins):
 
@@ -205,7 +119,7 @@ Values are merged in order (highest priority wins):
 4. **User TOML** — `~/.myapp.toml`
 5. **Dataclass defaults** — Default values in class definition
 
-### 5. Security
+### Security
 
 Clevis validates file permissions by default:
 
@@ -219,31 +133,18 @@ config = get_config(Config, name="myapp")
 config = get_config(
     Config,
     name="myapp",
-    security={
-        "file_permissions": SecurityAction.DONT_CHECK,
-        "directory_permissions": SecurityAction.DONT_CHECK
-    }
+    security={"file_permissions": SecurityAction.DONT_CHECK}
 )
 
 # Log warnings instead of rejecting
 config = get_config(
     Config,
     name="myapp",
-    security={
-        "file_permissions": SecurityAction.LOG,
-        "directory_permissions": SecurityAction.LOG
-    }
+    security={"file_permissions": SecurityAction.LOG}
 )
 ```
 
-**Fix security issues:**
-
-```bash
-# Secure: owner read/write only
-chmod 600 ~/.myapp.toml
-```
-
-## Examples Showcase
+## Examples
 
 The `examples/` directory contains 10 comprehensive examples:
 
@@ -264,6 +165,8 @@ See [examples/README.md](examples/README.md) for detailed feature matrix and lea
 
 ## Usage Patterns
 
+For detailed usage patterns and API reference, see [PACKAGE.md](PACKAGE.md).
+
 ### Basic Configuration
 
 ```python
@@ -275,27 +178,7 @@ class Config:
     name: str = "MyApp"
     debug: bool = False
 
-# Load from user/project TOML + CLI args
 config = get_config(Config, name="myapp")
-```
-
-### Environment Variables
-
-```bash
-pip install clevis[envtoml]
-```
-
-```toml
-# myapp.toml
-[database]
-password = "${DB_PASSWORD}"
-host = "${DB_HOST}"
-```
-
-```bash
-export DB_PASSWORD=secret
-export DB_HOST=prod.db.com
-python app.py
 ```
 
 ### CLI Subcommands
@@ -320,45 +203,6 @@ if __name__ == "__main__":
     elif cmd == "build":
         config = get_config(BuildConfig, project=False, user=False)
         print(f"Building to {config.output}")
-```
-
-```bash
-python app.py check --verbose
-python app.py c --fix      # Alias
-python app.py build --output dist
-```
-
-### Factory Pattern (Multi-Module)
-
-```python
-from clevis import configclass, get_config, get_factory
-import argparse
-
-@configclass
-class AppConfig:
-    verbose: bool = False
-
-@configclass
-class Module1Config:
-    name: str = "module1"
-
-@configclass
-class Module2Config:
-    name: str = "module2"
-
-# Configure prefixes for CLI args
-get_factory(Module1Config).prefix = "m1"  # --m1-name
-get_factory(Module2Config).prefix = "m2"  # --m2-name
-
-# Share parser across modules
-parser = argparse.ArgumentParser(description="Multi-Module App")
-get_factory(AppConfig).parser = parser
-get_factory(Module1Config).parser = parser
-get_factory(Module2Config).parser = parser
-
-# Each module gets its own prefixed config
-m1 = Module1()  # Uses --m1-name
-m2 = Module2()  # Uses --m2-name
 ```
 
 ### Dynamic Registration (Plugin Architecture)
@@ -387,158 +231,13 @@ print(config.pkgq.enabled)  # True
 print(config.pkgq.timeout)  # 30
 ```
 
-**TOML support:**
-
-```toml
-[tools.list]
-format = "json"
-
-[tools.pkgq]  # Registered field works with TOML
-enabled = true
-timeout = 60
-```
-
-**CLI support:**
-
-```bash
-python app.py --tools-pkgq-enabled --tools-pkgq-timeout 90
-```
-
-See [examples/dynamic.py](examples/dynamic.py) and [examples/plugin.py](examples/plugin.py) for complete examples.
-
-### Plugin Configuration
-
-When building plugin systems, you need a parent config that plugins can register to:
-
-**Parent Config Design:**
-
-```python
-from dataclasses import dataclass, field
-
-# Parent config must NOT be frozen
-@dataclass
-class ToolsConfig:
-  """Container for tool configurations."""
-  list: str = "default"
-
-# Plugin defines its config
-@dataclass
-class PkgqToolConfig:
-  enabled: bool = True
-  timeout: int = 30
-
-# Plugin registers itself
-from clevis import register_field
-register_field(ToolsConfig, "pkgq", PkgqToolConfig)
-```
-
-**TOML Section Naming:**
-
-Registered fields create TOML sections using the registered field name:
-
-```toml
-[tools.list]
-format = "json"
-
-[tools.pkgq]  # Field name becomes section name
-enabled = true
-timeout = 60
-```
-
-**CLI Argument Naming:**
-
-Nested registered fields use dashed CLI arguments:
-
-```bash
-# Pattern: --{parent}-{field}-{option}
-python app.py --tools-pkgq-enabled --tools-pkgq-timeout 90
-
-# For deeply nested:
-# register_field(AppConfig, "tools", ToolsConfig)
-# register_field(ToolsConfig, "pkgq", PkgqToolConfig)
-# Result: --tools-pkgq-timeout
-```
-
-**Complete Plugin Example:**
-
-```python
-from dataclasses import dataclass, field
-from clevis import configclass, get_config, register_field, SecurityAction
-
-# Application defines parent config
-@dataclass
-class ToolsConfig:
-  list: str = "default"
-
-@configclass
-class AppConfig:
-  name: str = "myapp"
-  tools: ToolsConfig = field(default_factory=ToolsConfig)
-
-# Plugin module defines and registers its config
-@dataclass
-class PkgqToolConfig:
-  enabled: bool = True
-  timeout: int = 30
-
-register_field(ToolsConfig, "pkgq", PkgqToolConfig)
-
-# Both application and plugin config work together
-config = get_config(
-  AppConfig,
-  name="app",
-  security={"file_permissions": SecurityAction.LOG}
-)
-
-print(config.name)           # "myapp"
-print(config.tools.list)     # "default"
-print(config.tools.pkgq.enabled)  # True
-```
-
-**Best Practices:**
-
-1. **Non-frozen parent** — Use `@dataclass` without `frozen=True`
-2. **Early registration** — Call `register_field()` before `get_config()`
-3. **Descriptive names** — Field names become TOML section names
-4. **Document registration** — Comment which plugins register to which parents
-5. **Security settings** — Use `SecurityAction.LOG` during development
-
-See [examples/plugin.py](examples/plugin.py) for a production-ready plugin implementation.
-
-### Custom Validation
-
-```python
-from dataclasses import dataclass
-from urllib.parse import urlparse
-
-@dataclass
-class Config:
-    server_url: str | None = None
-
-    def __post_init__(self):
-        if self.server_url:
-            parsed = urlparse(self.server_url)
-            if parsed.scheme not in ("http", "https"):
-                raise ValueError(f"Invalid URL: scheme must be http or https")
-            if not parsed.netloc:
-                raise ValueError(f"Invalid URL: missing host")
-
-# Raises ValueError for invalid URLs
-config = get_config(Config, name="myapp")
-```
-
 ### Library Mode
-
-Use Clevis in web frameworks, tests, or embedded contexts:
 
 ```python
 from clevis import get_config
 
 # Library mode - skip CLI parsing
 config = get_config(Config, name="myapp", cli=False)
-
-# Programmatic control
-config = get_config(Config, name="myapp", cli=False, args=["--debug"])
 
 # Testing
 def test_my_config():
@@ -553,124 +252,22 @@ def test_my_config():
 
 ## API Reference
 
-### `get_config(data_class, name="project", user=True, project=True, cli=True, args=None, security=None)`
+For complete API documentation, see [PACKAGE.md](PACKAGE.md) or [docs/api.rst](docs/api.rst).
 
-Load configuration from TOML files and CLI arguments.
+**Key functions:**
 
-**Parameters:**
-- `data_class` — The dataclass type to populate
-- `name` — Config file name (without `.toml` extension)
-- `user` — Load user-level config (`~/.{name}.toml`)
-- `project` — Load project-level config (`./{name}.toml`)
-- `cli` — Parse CLI arguments from `sys.argv` (default: `True`)
-- `args` — CLI arguments (defaults to `sys.argv[1:]` when `cli=True`)
-- `security` — Security check configuration (default: maximally strict)
+- `get_config(data_class, name, ...)` — Load configuration from TOML and CLI
+- `configclass(cmd=None, help=None, ...)` — Decorator for configuration classes
+- `register_field(parent_class, field_name, field_type)` — Register plugin fields
+- `get_factory(config_class)` — Get Factory for multi-module apps
+- `get_cmd()` — Get active subcommand name
 
-**Returns:** Instance of the dataclass with merged configuration
+## Documentation
 
-**Raises:**
-- `ConfigError` — Missing required fields or wrong types
-- `SecurityError` — Security check failed (when `action="reject"`)
-- `ImportError` — No TOML parser available
-
-### `configclass(cls=None, cmd=None, help=None, aliases=None)`
-
-Decorator that applies `@dataclass` and registers the class for CLI subcommands.
-
-**Parameters:**
-- `cls` — The class to decorate
-- `cmd` — Subcommand name (e.g., `"build"`)
-- `help` — Help text for the subcommand
-- `aliases` — List of aliases for the subcommand (e.g., `["b"]`)
-
-### `register_field(parent_class, field_name, field_type)`
-
-Register a field to a dataclass at runtime (for plugin architectures).
-
-**Parameters:**
-- `parent_class` — The parent dataclass to extend (must NOT be frozen)
-- `field_name` — Name of the field to add
-- `field_type` — The dataclass type for the field
-
-**Raises:**
-- `TypeError` — Parent class is frozen
-- `ValueError` — Field name already exists
-- `RuntimeError` — Called after `get_config()` with CLI enabled
-
-### `get_factory(config_class)`
-
-Get the Factory instance for a configuration class (for advanced use).
-
-### `get_cmd(parser=None, args=None)`
-
-Get the active subcommand name from parsed arguments.
-
-### `SecurityAction`
-
-Enum for security check actions:
-- `SecurityAction.DONT_CHECK` — Skip validation
-- `SecurityAction.LOG` — Log warning, continue
-- `SecurityAction.REJECT` — Raise `SecurityError` (default)
-
-### `ConfigError`
-
-Raised when configuration is missing or invalid. Provides helpful error messages with actionable suggestions.
-
-### `SecurityError`
-
-Raised when security validation fails. Contains `path` and `check` attributes.
-
-For complete API documentation, see [docs/api.rst](docs/api.rst) or visit [clevis.readthedocs.io](https://clevis.readthedocs.io).
-
-## Error Messages
-
-Clevis provides helpful, actionable errors:
-
-**When using CLI (default):**
-
-```
-======================================================================
-Configuration Error
-======================================================================
-
-Field: database.host
-Issue: Required field has no value
-
-Provide this value in one of these ways:
-
-  1. Project config: ./myapp.toml
-     [database]
-     host = "your_value"
-
-  2. User config: ~/.myapp.toml
-     (same format as above)
-
-  3. CLI argument: --database-host <value>
-
-======================================================================
-```
-
-**When using library mode (`cli=False`):**
-
-```
-======================================================================
-Configuration Error
-======================================================================
-
-Field: database.host
-Issue: Required field has no value
-
-Provide this value in one of these ways:
-
-  1. Project config: ./myapp.toml
-     [database]
-     host = "your_value"
-
-  2. User config: ~/.myapp.toml
-     (same format as above)
-
-======================================================================
-```
+- **Quick Start** — This README
+- **Examples** — [examples/README.md](examples/README.md) with feature matrix
+- **Package Guide** — [PACKAGE.md](PACKAGE.md) comprehensive API and patterns
+- **API Reference** — [docs/api.rst](docs/api.rst) or [clevis.readthedocs.io](https://clevis.readthedocs.io)
 
 ## Testing
 
@@ -681,20 +278,11 @@ make test
 # Run tests with coverage
 make test-cov
 
-# Run tests on all Python versions
-make test-all
+# Run quality checks
+make check
 ```
 
-## Documentation
-
-- **Quick Start** — This README
-- **Examples** — [examples/README.md](examples/README.md) with feature matrix
-- **Usage Guide** — [docs/usage.rst](docs/usage.rst) comprehensive guide
-- **API Reference** — [docs/api.rst](docs/api.rst) or [clevis.readthedocs.io](https://clevis.readthedocs.io)
-
 ## Contributing
-
-We welcome contributions! Please see our development setup:
 
 ```bash
 # Clone the repository
