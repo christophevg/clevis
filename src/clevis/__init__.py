@@ -507,24 +507,20 @@ def get_config(
   _check_directory_permissions(project_config, dir_action)
 
   # Load user-level config (TOCTOU-safe)
+  # Note: _load_toml_from_fd wraps fd in a file object that takes ownership
+  # and closes it when done. No explicit fd close needed here.
   if user:
     _, user_fd = _check_file_permissions(user_config, file_action)
     if user_fd is not None:
-      try:
-        cfg.update(_load_toml_from_fd(user_fd))
-      finally:
-        # fd is closed by _load_toml_from_fd via file object
-        pass
+      cfg.update(_load_toml_from_fd(user_fd))
 
   # Load project-level config (TOCTOU-safe)
+  # Note: _load_toml_from_fd wraps fd in a file object that takes ownership
+  # and closes it when done. No explicit fd close needed here.
   if project:
     _, project_fd = _check_file_permissions(project_config, file_action)
     if project_fd is not None:
-      try:
-        cfg.update(_load_toml_from_fd(project_fd))
-      finally:
-        # fd is closed by _load_toml_from_fd via file object
-        pass
+      cfg.update(_load_toml_from_fd(project_fd))
 
   # Extract subcommand section from TOML config if applicable
   # When @configclass(cmd="print") or @configclass(config="print") is used,
@@ -647,4 +643,5 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+
 
