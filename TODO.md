@@ -11,17 +11,6 @@ Plugin configuration support for architectures like Yoker.
 
 
 
-- [ ] **P2-010: Add tests for dynamic field registration**
-  - Test `register_field()` basic functionality
-  - Test error cases (frozen parent, duplicate, late registration)
-  - Test TOML loading for registered fields
-  - Test CLI arg generation for registered fields
-  - Test backward compatibility with existing patterns
-  - **Satisfies**: R109 (new requirement)
-  - **Acceptance**:
-    - All tests pass
-    - Coverage for new code ≥90%
-    - Existing tests continue to pass
 
 ### Phase 3: Polish (P3 - Medium)
 
@@ -190,6 +179,23 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-010: Verify dynamic field registration tests** ✅ 2026-06-11 (PR #26)
+  - Verified all tests exist and meet acceptance criteria
+  - Test coverage: 15 tests in test_registration.py
+  - Coverage: 90% for registration.py module
+  - All 260 tests pass
+  - **Satisfies**: R109 (new requirement)
+  - **Acceptance**:
+    - ✅ Test register_field() basic functionality (4 tests)
+    - ✅ Test error cases (3 tests)
+    - ✅ Test TOML loading (1 test)
+    - ✅ Test CLI arg generation (1 test)
+    - ✅ Test backward compatibility (3 tests)
+    - ✅ Test multiple registrations (3 tests)
+    - ✅ All tests pass (260/260)
+    - ✅ Coverage ≥90% for registration module
+  - **Reference**: Tests implemented in P2-007, verification in this PR
 
 - [x] **P2-009: Add comprehensive documentation and examples** ✅ 2026-06-11 (PR #25)
   - Update `PACKAGE.md` with all 6 use cases
