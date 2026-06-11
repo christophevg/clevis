@@ -13,6 +13,7 @@ TOML Parser Selection (priority order):
 
 import logging
 import os
+import re
 import stat
 from collections.abc import Callable
 from dataclasses import fields, is_dataclass
@@ -591,8 +592,6 @@ def get_config(
     # Format: "DatabaseConfig.__init__() missing 1 required positional argument: 'host'"
     if "required positional argument:" in error_msg:
       # Extract the class name and argument name
-      import re
-
       match = re.search(r"(\w+)\.__init__\(\).*missing.*argument: '(\w+)'", error_msg)
       if match:
         class_name = match.group(1)
@@ -636,5 +635,3 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
-
-
