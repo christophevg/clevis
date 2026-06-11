@@ -143,6 +143,31 @@ def _create_init_with_new_field(
 
   This manually creates an __init__ that handles the new field
   with its default_factory.
+
+  Limitations:
+    This manual __init__ generation does not support all dataclass features:
+
+    - kw_only: Keyword-only fields (Python 3.10+) are not respected. All
+      parameters accept both positional and keyword arguments via **kwargs.
+    - init=False: Fields marked with init=False are still included in the
+      generated __init__, which differs from standard dataclass behavior.
+    - Field order: The original field ordering may not be preserved exactly
+      as the dataclass decorator would, since dynamically added fields are
+      appended.
+    - __post_init__: The generated __init__ does not call __post_init__
+      automatically. Classes requiring __post_init__ should use the standard
+      dataclass __init__ by not using dynamic field registration.
+    - Type annotations: Method signatures and type hints are not preserved.
+      IDEs and type checkers will not see the dynamically added fields.
+
+    For most use cases with simple dataclass configurations (non-frozen,
+    basic field types, no kw_only), these limitations are acceptable.
+    Complex configurations may need alternative approaches.
+
+  Args:
+    cls: The dataclass to update.
+    field_name: The name of the newly added field.
+    default_factory: Factory function for the new field's default value.
   """
   # Get existing fields (excluding the new one we just added)
   existing_fields = [f for f in fields(cls) if f.name != field_name]
