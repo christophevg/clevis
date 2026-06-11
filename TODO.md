@@ -9,15 +9,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 Plugin configuration support for architectures like Yoker.
 
 
-- [ ] **P2-017: Extract TOML extension constants**
-  - Extract magic strings for `.toml` and `.{name}.toml` to constants
-  - Strings appear 11+ times across files
-  - Define: `TOML_EXT = ".toml"`, `USER_CONFIG_TEMPLATE = ".{name}.toml"`, `PROJECT_CONFIG_TEMPLATE = "{name}.toml"`
-  - **Acceptance**:
-    - Constants defined in appropriate module
-    - All magic strings replaced with constants
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
 
 - [ ] **P2-018: Remove misleading empty try/finally**
   - Fix empty try/finally blocks at `__init__.py:501-511`
@@ -220,6 +211,16 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-017: Extract TOML extension constants** ✅ 2026-06-11 (PR #23)
+  - Extract magic strings for `.toml` and `.{name}.toml` to constants
+  - Define: `TOML_EXT`, `USER_CONFIG_TEMPLATE`, `PROJECT_CONFIG_TEMPLATE`
+  - **Acceptance**:
+    - Constants defined in `__init__.py` module
+    - All code usages updated to use constants
+    - Type stub declarations added
+    - All tests pass
+  - **Reference**: Code review 2026-06-10
 
 - [x] **P2-016: Document dataclass __init__ generation limitations** ✅ 2026-06-11 (PR #22)
   - Document in `registration.py` that manual `__init__` generation doesn't handle all dataclass features
