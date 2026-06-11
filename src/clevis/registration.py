@@ -106,6 +106,18 @@ def register_field(
   # We need to use _FIELD to mark this as a real field
   import dataclasses
 
+  # Private API usage: dataclasses._FIELD
+  # This is required to create valid Field objects at runtime. The _FIELD marker
+  # is used internally by the dataclasses module to distinguish real fields from
+  # class variables and other attributes. Without it, dataclass operations like
+  # fields() would not recognize dynamically added fields.
+  #
+  # Migration path: Python 3.10+ provides dataclasses.fields() which can identify
+  # fields by their _field_type attribute, but there's no public API to create
+  # valid Field objects. If _FIELD is removed in future Python versions, we would
+  # need to track fields manually or find an alternative approach.
+  #
+  # See: https://github.com/python/cpython/issues/98116 (public field creation API)
   _FIELD = dataclasses._FIELD  # type: ignore[attr-defined]
 
   new_field = Field(

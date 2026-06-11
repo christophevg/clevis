@@ -12,6 +12,10 @@ from clevis.factory import get_factory
 
 logger = logging.getLogger(__name__)
 
+# TypeVar for the decorator pattern.
+# Unconstrained (no bound) because the decorator can be applied to any class
+# that will become a dataclass. The TypeVar preserves type information so that
+# @configclass class X returns type X (not a generic "type" or "object").
 T = TypeVar("T")
 
 
@@ -100,7 +104,29 @@ def configclass(
       factory.config = config
     return clz
 
+  # Decorator return logic:
+  # Python decorators can be used in two ways:
+  #
+  # 1. Without arguments: @configclass
+  #    - cls is passed directly, parameters are None
+  #    - Decorator is called immediately
+  #    - Return the decorated class directly
+  #
+  # 2. With arguments: @configclass(cmd="check")
+  #    - cls is None, parameters are provided
+  #    - Decorator must return a function that takes cls
+  #    - Return a lambda that will be called with cls
+  #
+  # The condition checks for the "without arguments" case:
+  # - cls is not None (decorator received class directly)
+  # - All optional parameters are None (no parentheses or empty @configclass())
   if cls and not cmd and help is None and aliases is None and config is None:
+    # Case 1: @configclass without arguments
+    # The decorator was used as @configclass, not @configclass(...)
+    # Apply the decorator immediately and return the result
     return decorator(cls)
   else:
+    # Case 2: @configclass with arguments or cls is None
+    # The decorator was used as @configclass(cmd="check") or similar
+    # Return a function that takes the class and applies the decorator
     return lambda clz: decorator(clz)

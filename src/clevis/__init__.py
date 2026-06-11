@@ -337,14 +337,14 @@ def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   Get the active subcommand name from parsed arguments.
 
   Args:
-    parser: Optional parser to use (defaults to _default_parser)
+    parser: Optional parser to use (defaults to creating a new default parser)
     args: Optional list of CLI arguments (for testing)
 
   Returns:
     The subcommand name or None if no subcommand was used
   """
   if not parser:
-    parser = _factory_module._default_parser
+    parser = _factory_module._get_default_parser()
   parsed_args = vars(_ensure_configured(parser).parse_args(args))
   cmd: str | None = parsed_args.pop("cmd", None)
   return cmd
@@ -354,38 +354,52 @@ def _merge_list_args(
   clz: type,
   cli_args: dict[str, Any],
   toml_cfg: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
   """
-  Merge CLI list arguments with TOML configuration in-place.
+  Merge CLI list arguments with TOML configuration.
 
   For list fields:
   - None (no CLI arg) → keep TOML value
   - [] (--no-field) → clear, result is []
   - [...] (--field X --field Y) → TOML base + CLI values
 
-  Note: This function modifies `cli_args` and `toml_cfg` in-place,
-  removing merged list fields from `cli_args` and updating values in `toml_cfg`.
+  This function does NOT modify the input dictionaries. It returns a new
+  dictionary with the merged configuration.
 
   Args:
     clz: The dataclass type
     cli_args: CLI arguments (dotted keys)
-    toml_cfg: TOML configuration (modified in-place)
+    toml_cfg: TOML configuration
+
+  Returns:
+    New dictionary with merged list values. Non-list CLI args are included
+    unchanged. List args are merged with TOML values according to the rules
+    above.
   """
   # Get all list fields in the config class
   list_fields = _get_list_fields(clz, [])
+
+  # Start with a copy of TOML config (deep copy for nested dicts)
+  result: dict[str, Any] = {}
+  for key, value in toml_cfg.items():
+    if isinstance(value, dict):
+      # Deep copy nested dicts
+      result[key] = dict(value)
+    else:
+      result[key] = value
 
   # Merge list fields
   for field_name in list_fields:
     cli_value = cli_args.get(field_name)
 
     if cli_value is None:
-      # No CLI argument for this field - keep TOML value
+      # No CLI argument for this field - keep TOML value (already in result)
       continue
 
-    # Navigate to the nested location in toml_cfg
+    # Navigate to the nested location in result
     parts = field_name.split(".")
     final_key = parts.pop()
-    scope = toml_cfg
+    scope = result
     for step in parts:
       if step not in scope:
         scope[step] = {}
@@ -404,8 +418,25 @@ def _merge_list_args(
         )
         toml_value = []
       scope[final_key] = toml_value + cli_value
-      # Remove from cli_args so apply_to_dict doesn't override
-      del cli_args[field_name]
+
+  # Add non-list CLI args to result (they override TOML values)
+  # Skip None values (default optional value, can't be set through command line)
+  for key, value in cli_args.items():
+    if key not in list_fields and value is not None:
+      # Navigate to nested location and set value
+      parts = key.split(".")
+      if len(parts) == 1:
+        result[key] = value
+      else:
+        final_key = parts.pop()
+        scope = result
+        for step in parts:
+          if step not in scope:
+            scope[step] = {}
+          scope = scope[step]
+        scope[final_key] = value
+
+  return result
 
 
 def _get_list_fields(clz: type, path: list[str]) -> list[str]:
@@ -548,10 +579,8 @@ def get_config(
   # Parse CLI args if requested and merge them into the config
   if cli or args is not None:
     cli_args = get_factory(clz).get_args(args)
-    # Separate list args and merge them with TOML values
-    _merge_list_args(clz, cli_args, cfg)
-    # Apply non-list args (they override TOML values)
-    apply_to_dict(cli_args, cfg)
+    # Merge list args with TOML values, keeping non-list CLI args
+    cfg = _merge_list_args(clz, cli_args, cfg)
 
   # Convert dict to dataclass
   # Use cast=[tuple, set] to convert TOML lists to tuples and sets
@@ -643,5 +672,3 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
-
-
