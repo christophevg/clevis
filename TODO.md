@@ -9,16 +9,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 Plugin configuration support for architectures like Yoker.
 
 
-
-- [ ] **P2-015: Extract nested function to module level**
-  - Extract `register_arg_name` nested function from `factory.py:332-364` to module level
-  - Function captures outer scope variables making it hard to test
-  - **Acceptance**:
-    - `register_arg_name` is a module-level function with explicit parameters
-    - Function is unit-testable in isolation
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
-
 - [ ] **P2-016: Document dataclass __init__ generation limitations**
   - Document in `registration.py` that manual `__init__` generation at lines 139-173 doesn't handle all dataclass features
   - Features not handled: kw_only, init=False fields, etc.
@@ -240,6 +230,15 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P2-015: Extract nested function to module level** ✅ 2026-06-11 (PR #21)
+  - Extract `register_arg_name` nested function from `factory.py` to module level as `_register_arg_name`
+  - Function captures outer scope variables making it hard to test
+  - **Acceptance**:
+    - `_register_arg_name` is a module-level function with explicit parameters
+    - Function is unit-testable in isolation
+    - All tests pass (260 tests including 10 new unit tests)
+  - **Reference**: Code review 2026-06-10
 
 - [x] **P2-014: Move import to module level** ✅ 2026-06-11 (PR #20)
   - Move `import re` from inside exception handler at `__init__.py:594` to top of file
