@@ -129,7 +129,10 @@ def _check_file_permissions(path: Path, action: SecurityAction) -> tuple[bool, i
     # Don't close fd again - already closed before raising SecurityError
     raise
   except BaseException:
-    # Close fd on any other exception
+    # Close fd on any exception, including system exceptions (KeyboardInterrupt,
+    # SystemExit, GeneratorExit). This is intentional: we clean up the file
+    # descriptor before re-raising. Using `except Exception:` would leak FDs
+    # on system exceptions. See P2-013 in TODO.md for rationale.
     os.close(fd)
     raise
 
@@ -633,4 +636,5 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+
 

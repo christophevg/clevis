@@ -8,15 +8,6 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 Plugin configuration support for architectures like Yoker.
 
-- [ ] **P2-013: Fix overly broad exception handling**
-  - Replace `except BaseException:` at `__init__.py:131` with `except Exception:`
-  - BaseException catches KeyboardInterrupt, SystemExit, GeneratorExit which should propagate
-  - Only use for cleanup with explicit re-raise
-  - **Acceptance**:
-    - `except Exception:` used instead of `except BaseException:`
-    - System exceptions propagate naturally
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
 
 - [ ] **P2-014: Move import to module level**
   - Move `import re` from inside exception handler at `__init__.py:591` to top of file
@@ -244,6 +235,17 @@ These are ideas with no current demand or owner. They are kept here so the inten
   - Add YAML/JSON loaders as extras
   - TOML remains the default
   - **No owner, no demand, not scheduled**
+
+## Won't Fix
+
+Tasks that were reviewed and rejected with documented rationale.
+
+- [x] **P2-013: Fix overly broad exception handling** ❌ 2026-06-11 (PR #19 - closed)
+  - **Rejected**: The `except BaseException:` pattern at `__init__.py:131` is correct for resource cleanup.
+  - The code catches `BaseException`, closes the file descriptor, and re-raises. This ensures FDs are cleaned up even on system exceptions like `KeyboardInterrupt` and `SystemExit`.
+  - Changing to `except Exception:` would cause resource leaks for system exceptions.
+  - **Action taken**: Added code comment explaining the intentional design pattern.
+  - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
 
