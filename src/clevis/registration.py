@@ -3,7 +3,25 @@
 This module provides runtime field registration for dataclasses, enabling
 plugin architectures to inject configuration fields into parent configs.
 
+Key Features:
+  - Add fields to dataclasses at runtime
+  - Automatic CLI argument generation for registered fields
+  - TOML configuration support for plugins
+  - Integration with Factory pattern for seamless configuration
+
+Requirements:
+  - Parent config must NOT be frozen (frozen=True not allowed)
+  - Registration must happen before get_config() is called
+  - Registered fields use default_factory for initialization
+
+Relationships:
+  - factory.py: Uses get_factory() to check if parser is already configured
+  - __init__.py: Exposes register_field() in public API
+
 Example:
+    from dataclasses import dataclass
+    from clevis import register_field, get_config
+
     @dataclass  # Must NOT be frozen
     class ToolsConfig:
         list: ListToolConfig = field(default_factory=ListToolConfig)
@@ -19,6 +37,8 @@ Example:
     # - ToolsConfig.pkgq field added
     # - TOML: [tools.pkgq] → config.tools.pkgq
     # - CLI: --tools-pkgq-enabled
+
+    config = get_config(ToolsConfig, name="tools")
 """
 
 from collections.abc import Callable
@@ -232,3 +252,4 @@ def _update_repr(cls: type) -> None:
 
   # Replace __repr__
   cls.__repr__ = __repr__  # type: ignore[method-assign, assignment]
+

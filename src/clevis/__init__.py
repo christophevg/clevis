@@ -1,14 +1,35 @@
-"""
-Clevis - Configuration management for Python projects.
+"""Clevis - Configuration management for Python projects.
 
-Provides dataclass-based configuration with TOML file support,
-environment variable interpolation, and CLI argument generation.
+This module provides the main entry point for Clevis configuration management,
+offering dataclass-based schemas with TOML file support, environment variable
+interpolation, and automatic CLI argument generation.
+
+Main Components:
+  - get_config(): Load configuration from all sources (TOML + CLI + env)
+  - get_cmd(): Get active subcommand name from parsed arguments
+  - configclass: Decorator combining @dataclass with factory registration
+  - register_field(): Add fields at runtime for plugin architectures
+
+Security:
+  File permission validation via SecurityAction enum (DONT_CHECK, LOG, REJECT).
+  Default is REJECT for production security.
 
 TOML Parser Selection (priority order):
-  1. envtoml  - Env var interpolation (${VAR}) - install: pip install clevis[envtoml]
-  2. tomlev   - Tomlev parser - install: pip install clevis[tomlev]
-  3. tomli    - Pure Python TOML - install: pip install clevis[tomli]
+  1. envtoml  - Env var interpolation (${VAR}) - pip install clevis[envtoml]
+  2. tomlev   - Env vars with defaults (${VAR|default}) - pip install clevis[tomlev]
+  3. tomli    - Pure Python TOML - pip install clevis[tomli]
   4. tomllib  - Stdlib (Python 3.11+) - no extras needed
+
+Example:
+  from dataclasses import dataclass
+  from clevis import get_config
+
+  @dataclass
+  class Config:
+      name: str = "MyApp"
+      debug: bool = False
+
+  config = get_config(Config, name="myapp")
 """
 
 import logging
@@ -672,3 +693,4 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+

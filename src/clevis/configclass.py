@@ -1,6 +1,37 @@
 """Configclass decorator for registering dataclasses with Clevis.
 
-Provides the @configclass decorator that combines @dataclass with factory registration.
+This module provides the @configclass decorator that combines @dataclass with
+automatic factory registration, enabling seamless integration with Clevis's
+configuration system.
+
+The decorator:
+  - Applies @dataclass to the class
+  - Registers the class with get_factory()
+  - Supports subcommand configuration for CLI apps
+  - Enables TOML section extraction via config parameter
+
+Relationships:
+  - factory.py: Uses get_factory() to register decorated classes
+  - __init__.py: Uses @configclass for CLI subcommand configuration
+
+Example:
+  from clevis import configclass, get_config
+
+  # Basic usage
+  @configclass
+  class AppConfig:
+      name: str = "default"
+      debug: bool = False
+
+  # Subcommand support
+  @configclass(cmd="check", help="Run diagnostics", aliases=["c"])
+  class CheckConfig:
+      verbose: bool = False
+
+  # TOML section override
+  @configclass(cmd="cli", config="client")
+  class CliConfig:
+      server_url: str = "http://localhost:8000"
 """
 
 import logging
@@ -130,3 +161,4 @@ def configclass(
     # The decorator was used as @configclass(cmd="check") or similar
     # Return a function that takes the class and applies the decorator
     return lambda clz: decorator(clz)
+

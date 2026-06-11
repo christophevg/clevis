@@ -464,6 +464,54 @@ from clevis import get_config
 config = get_config(Config, name="app", cli=False)
 ```
 
+## Logging
+
+Clevis uses Python's standard library logging. The module-level logger is named `clevis`.
+
+### Library Usage
+
+Configure logging to see Clevis warnings and debug messages:
+
+```python
+import logging
+
+# Enable Clevis logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger("clevis")
+logger.setLevel(logging.DEBUG)  # For verbose output
+```
+
+### Logged Events
+
+| Event | Level | Module | Description |
+|-------|-------|--------|-------------|
+| Security warning | WARNING | clevis | File readable by group/other |
+| Security warning | WARNING | clevis | Directory world-writable |
+| Type mismatch | WARNING | clevis | Expected list, got other type |
+| Unused decorator param | WARNING | configclass | help/aliases without cmd |
+
+### Custom Handler Example
+
+```python
+import logging
+
+# Custom handler for Clevis messages
+handler = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+logger = logging.getLogger("clevis")
+logger.addHandler(handler)
+logger.setLevel(logging.DEBUG)
+```
+
+### Suppressing Warnings
+
+For production with permissive file permissions:
+
+```python
+logging.getLogger("clevis").setLevel(logging.ERROR)
+```
+
 ## TOML Parser Selection
 
 Auto-selection: envtoml → tomlev → tomli → tomllib (stdlib 3.11+)
