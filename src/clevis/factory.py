@@ -48,10 +48,96 @@ class SubParser(Protocol):
   ) -> Parser: ...
 
 
-# the default parser is assigned to Factories that aren't initialized with a parser
-_default_parser: argparse.ArgumentParser = argparse.ArgumentParser()
+class ParserRegistry:
+  """
+  Registry for tracking parser-related state across factories.
 
+  Manages three types of global state:
+  - Configured parsers: Track which parsers have had their arguments added
+  - Field owners: Prevent duplicate field registrations per parser
+  - Argument names: Prevent argument name conflicts per parser
+
+  This class provides a cleaner API for managing parser state that was
+  previously managed via module-level global dictionaries.
+  """
+
+  def __init__(self) -> None:
+    """Initialize an empty registry."""
+    self._configured_parsers: list[Parser] = []
+    # Track which field owner classes have had their CLI args registered for each parser
+    # Key: parser, Value: set of (owner_class, field_name) tuples
+    self._registered_field_owners: dict[Parser, set[tuple[type, str]]] = {}
+    # Track all registered argument names (canonical + aliases) for conflict detection
+    # Key: parser, Value: set of argument names (e.g., {"--packages", "--with"})
+    self._registered_arg_names: dict[Parser, set[str]] = {}
+
+  def is_configured(self, parser: Parser) -> bool:
+    """Check if a parser has been configured."""
+    return parser in self._configured_parsers
+
+  def mark_configured(self, parser: Parser) -> None:
+    """Mark a parser as configured."""
+    self._configured_parsers.append(parser)
+
+  def is_field_registered(self, parser: Parser, owner: type, field_name: str) -> bool:
+    """Check if a field has been registered for a parser."""
+    if parser not in self._registered_field_owners:
+      return False
+    return (owner, field_name) in self._registered_field_owners[parser]
+
+  def register_field(self, parser: Parser, owner: type, field_name: str) -> None:
+    """Register a field for a parser."""
+    if parser not in self._registered_field_owners:
+      self._registered_field_owners[parser] = set()
+    self._registered_field_owners[parser].add((owner, field_name))
+
+  def is_arg_name_registered(self, parser: Parser, arg_name: str) -> bool:
+    """Check if an argument name is registered for a parser."""
+    if parser not in self._registered_arg_names:
+      return False
+    return arg_name in self._registered_arg_names[parser]
+
+  def register_arg_name(self, parser: Parser, arg_name: str) -> None:
+    """Register an argument name for a parser."""
+    if parser not in self._registered_arg_names:
+      self._registered_arg_names[parser] = set()
+    self._registered_arg_names[parser].add(arg_name)
+
+  def clear(self) -> None:
+    """Clear all registry state (for testing)."""
+    self._configured_parsers.clear()
+    self._registered_field_owners.clear()
+    self._registered_arg_names.clear()
+
+
+# Module-level state
 _sub_parsers: dict[Parser, Any] = {}
+
+# Global reference to default parser (created lazily by _get_default_parser)
+_default_parser: argparse.ArgumentParser | None = None
+
+# Module-level parser registry
+_registry = ParserRegistry()
+
+# Factory instances for each configuration class
+# Use forward reference since Factory is defined later
+_factories: dict[type, "Factory"] = {}
+
+
+def _get_default_parser() -> Parser:
+  """
+  Get or create the default parser.
+
+  Creates the parser lazily on first access instead of at module import time.
+  All Factories that don't specify a parser share this default instance.
+
+  Returns:
+    The shared default ArgumentParser instance.
+  """
+  global _default_parser
+  if _default_parser is None:
+    _default_parser = argparse.ArgumentParser()
+  return _default_parser  # type: ignore[return-value]
 
 
 def get_sub_parser(parser: Parser) -> SubParser:
@@ -62,6 +148,37 @@ def get_sub_parser(parser: Parser) -> SubParser:
     _sub_parsers[parser] = parser.add_subparsers(dest="cmd")
     _sub_parsers[parser].required = True
     return _sub_parsers[parser]  # type: ignore[no-any-return]
+
+
+def _unpack_union_type(type_def: type) -> type:
+  """
+  Unpack a Union type (Optional[T] or T | None) to get the non-None type.
+
+  Args:
+    type_def: A Union type like Optional[T] or T | None
+
+  Returns:
+    The non-None type from the union
+
+  Raises:
+    ValueError: If union has more than 2 types (complex unions not supported)
+  """
+  from types import UnionType
+
+  origin = get_origin(type_def)
+  # Not a union type - return as-is (shouldn't happen, but safety check)
+  if origin is not Union and origin is not UnionType:
+    return type_def
+
+  types = get_args(type_def)
+  # Empty union - return as-is
+  if len(types) == 0:
+    return type_def
+  # Complex unions (more than 2 types) are not supported
+  if len(types) > 2:
+    raise ValueError("Complex unions not supported")
+  # T | None or None | T - return the non-None type
+  return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
 
 
 def unpack_type(type_def: type) -> type:
@@ -78,49 +195,29 @@ def unpack_type(type_def: type) -> type:
 
   Returns:
       The non-None type from a union, or the type itself
-
-  Raises:
-      ValueError: If union has more than 2 types (not supported yet)
   """
   from types import UnionType
 
   origin = get_origin(type_def)
 
-  # Handle container types (list, dict, set, tuple) - return as-is
+  # Container types (list, dict, set, tuple) - return as-is
+  # dacite handles these directly
   if origin in (list, dict, set, tuple):
     return type_def
 
-  # Handle Literal types - return as-is (dacite validates)
+  # Literal types - return as-is
+  # dacite validates the value is one of the literal values
   if origin is Literal:
     return type_def
 
-  # Handle Union types (Optional[T] / T | None)
-  # Not a union type - return as-is
-  if origin is not Union and origin is not UnionType:
-    return type_def
+  # Union types (Optional[T] / T | None) - unpack to get the non-None type
+  # This handles both typing.Union and types.UnionType (Python 3.10+)
+  origin = get_origin(type_def)
+  if origin is Union or origin is UnionType:
+    return _unpack_union_type(type_def)
 
-  types = get_args(type_def)
-  # <type> | None is only supported combination
-  if len(types) == 0:
-    return type_def  # Not a generic/union
-  if len(types) > 2:
-    raise ValueError("Complex unions not supported")
-  # T | None or None | T
-  return types[0] if types[1] is type(None) else types[1]  # type: ignore[no-any-return]
-
-
-# keeps track if parser is configured
-_configured_parsers: list[Parser] = []
-
-# Track which field owner classes have had their CLI args registered for each parser
-# Key: parser, Value: set of (owner_class, field_name) tuples
-# This prevents the same field from being registered twice
-# (e.g., as --list-enabled and --tools-list-enabled)
-_registered_field_owners: dict[Parser, set[tuple[type, str]]] = {}
-
-# Track all registered argument names (canonical + aliases) for conflict detection
-# Key: parser, Value: set of argument names (e.g., {"--packages", "--with"})
-_registered_arg_names: dict[Parser, set[str]] = {}
+  # Non-union, non-container type - return as-is
+  return type_def
 
 
 def _register_arg_name(parser: Parser, arg_name: str, field_name: str) -> None:
@@ -135,11 +232,11 @@ def _register_arg_name(parser: Parser, arg_name: str, field_name: str) -> None:
   Raises:
     ValueError: If the argument name is already registered for this parser
   """
-  if arg_name in _registered_arg_names[parser]:
+  if _registry.is_arg_name_registered(parser, arg_name):
     raise ValueError(
       f"Alias '{arg_name}' conflicts with existing argument for field '{field_name}'"
     )
-  _registered_arg_names[parser].add(arg_name)
+  _registry.register_arg_name(parser, arg_name)
 
 
 def _ensure_configured(parser: Parser) -> Parser:
@@ -148,14 +245,13 @@ def _ensure_configured(parser: Parser) -> Parser:
 
   Lazy configuration - called on first get_config() for a given parser.
   """
-  global _configured_parsers
-  if parser not in _configured_parsers:
+  if not _registry.is_configured(parser):
     # lazy configure using each factory having this parser
     # Convert to list to avoid RuntimeError if factories dict changes during iteration
     for factory in list(_factories.values()):
       if factory.parser is parser:
         factory.configure_parser()
-    _configured_parsers.append(parser)
+    _registry.mark_configured(parser)
   return parser
 
 
@@ -206,7 +302,7 @@ class Factory:
 
   config_class: type
   prefix: str | None = None
-  parser: Parser = field(default_factory=lambda: _default_parser)  # type: ignore[assignment]
+  parser: Parser = field(default_factory=_get_default_parser)
   cmd: str | None = None
   help: str | None = None
   aliases: list[str] | None = None
@@ -225,7 +321,6 @@ class Factory:
     Raises:
       ValueError: If both cmd and prefix are set (mutually exclusive).
     """
-    global _registered_field_owners
     if self._configured:
       return
 
@@ -252,12 +347,6 @@ class Factory:
 
     # Get the target parser
     target_parser = self.sub_parser if self.sub_parser else self.parser
-
-    # Initialize tracking for this parser if needed
-    if target_parser not in _registered_field_owners:
-      _registered_field_owners[target_parser] = set()
-    if target_parser not in _registered_arg_names:
-      _registered_arg_names[target_parser] = set()
 
     # Configure fields with nested prefix tracking
     self._configure_fields(self.config_class, [], self._nested_prefix, target_parser, set())
@@ -323,12 +412,11 @@ class Factory:
       else:
         # Leaf field - add argument
         # Check if this field has already been registered
-        field_key = (clz, f.name)
-        if field_key in _registered_field_owners[target_parser]:
+        if _registry.is_field_registered(target_parser, clz, f.name):
           continue
 
         # Mark this field as registered
-        _registered_field_owners[target_parser].add(field_key)
+        _registry.register_field(target_parser, clz, f.name)
 
         # Build the argument name
         name = ".".join(path + [f.name])
@@ -553,10 +641,6 @@ class Factory:
     return result
 
 
-# factories for configurations
-_factories: dict[type, Factory] = {}
-
-
 def _reset_factories() -> None:
   """
   Clear all registered factories and configured parsers.
@@ -564,17 +648,14 @@ def _reset_factories() -> None:
   For testing only - ensures test isolation by resetting global state.
   Creates a fresh default parser.
   """
-  global _factories, _configured_parsers, _default_parser, _sub_parsers
-  global _registered_field_owners, _registered_arg_names
+  global _factories, _default_parser, _sub_parsers, _registry
   # Clear dictionaries/lists in-place instead of reassigning
   # This ensures all module references see the changes
   _factories.clear()
-  _configured_parsers.clear()
   _sub_parsers.clear()
-  _registered_field_owners.clear()
-  _registered_arg_names.clear()
-  # Create a new parser by reassigning (this is unavoidable for parser objects)
-  _default_parser = argparse.ArgumentParser()
+  _registry.clear()
+  # Reset default parser by setting to None (will be recreated lazily)
+  _default_parser = None
 
 
 def has_factory(clz: type) -> bool:
@@ -592,16 +673,35 @@ def has_factory(clz: type) -> bool:
 
 def get_factory(clz: type) -> Factory:
   """
-  Get the Factory for a configuration class.
+  Get or create the Factory for a configuration class.
 
-  Returns the same Factory instance for a given class (singleton pattern).
-  Creates a new Factory if one doesn't exist.
+  This function implements the singleton pattern for Factory instances:
+  - If a Factory already exists for the class, returns the existing instance
+  - If no Factory exists, creates a new one, registers it, and returns it
+
+  The singleton behavior ensures that:
+  - All parts of the code get the same Factory instance for a config class
+  - Configuration state (prefix, parser, cmd, etc.) is shared consistently
+  - Test isolation can be achieved via _reset_factories()
 
   Args:
     clz: The dataclass type to get a factory for.
 
   Returns:
-    Factory instance for the given class.
+    Factory instance for the given class (existing or newly created).
+
+  Example:
+      @configclass
+      class AppConfig:
+          name: str = "default"
+
+      # Get the factory (creates if needed)
+      factory = get_factory(AppConfig)
+      factory.prefix = "app1"
+
+      # Later, same instance is returned
+      factory2 = get_factory(AppConfig)
+      assert factory2.prefix == "app1"  # Same instance
   """
   global _factories
   try:

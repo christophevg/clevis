@@ -10,7 +10,7 @@ import pytest
 
 from clevis.factory import (
   _register_arg_name,
-  _registered_arg_names,
+  _registry,
   _reset_factories,
 )
 
@@ -23,25 +23,18 @@ class TestRegisterArgName:
     _reset_factories()
 
   def test_basic_registration(self):
-    """Test that arg_name is added to _registered_arg_names for the parser."""
+    """Test that arg_name is added to registry for the parser."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register an argument name
     _register_arg_name(parser, "--packages", "packages")
 
     # Verify it was added
-    assert "--packages" in _registered_arg_names[parser]
-    assert len(_registered_arg_names[parser]) == 1
+    assert _registry.is_arg_name_registered(parser, "--packages")
 
   def test_multiple_registrations_same_parser(self):
     """Test that multiple argument names can be registered for the same parser."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register multiple argument names
     _register_arg_name(parser, "--packages", "packages")
@@ -49,34 +42,26 @@ class TestRegisterArgName:
     _register_arg_name(parser, "--verbose", "verbose")
 
     # Verify all were added
-    assert len(_registered_arg_names[parser]) == 3
-    assert "--packages" in _registered_arg_names[parser]
-    assert "--name" in _registered_arg_names[parser]
-    assert "--verbose" in _registered_arg_names[parser]
+    assert _registry.is_arg_name_registered(parser, "--packages")
+    assert _registry.is_arg_name_registered(parser, "--name")
+    assert _registry.is_arg_name_registered(parser, "--verbose")
 
   def test_multiple_parsers_independent(self):
     """Test that registrations are independent per parser."""
     parser1 = argparse.ArgumentParser()
     parser2 = argparse.ArgumentParser()
 
-    # Initialize both parsers in _registered_arg_names
-    _registered_arg_names[parser1] = set()
-    _registered_arg_names[parser2] = set()
-
     # Register same arg_name for both parsers
     _register_arg_name(parser1, "--packages", "packages")
     _register_arg_name(parser2, "--packages", "packages")
 
     # Verify both parsers have it registered
-    assert "--packages" in _registered_arg_names[parser1]
-    assert "--packages" in _registered_arg_names[parser2]
+    assert _registry.is_arg_name_registered(parser1, "--packages")
+    assert _registry.is_arg_name_registered(parser2, "--packages")
 
   def test_conflict_detection_same_parser(self):
     """Test that registering the same arg_name twice for the same parser raises ValueError."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register an argument name
     _register_arg_name(parser, "--packages", "packages")
@@ -94,9 +79,6 @@ class TestRegisterArgName:
     """Test that error message includes the conflicting arg_name."""
     parser = argparse.ArgumentParser()
 
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
-
     # Register an argument name
     _register_arg_name(parser, "--verbose", "verbose")
 
@@ -111,9 +93,6 @@ class TestRegisterArgName:
   def test_error_message_includes_field_name(self):
     """Test that error message includes the field_name parameter."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register an argument name
     _register_arg_name(parser, "--name", "name_field")
@@ -130,24 +109,17 @@ class TestRegisterArgName:
     parser1 = argparse.ArgumentParser()
     parser2 = argparse.ArgumentParser()
 
-    # Initialize both parsers in _registered_arg_names
-    _registered_arg_names[parser1] = set()
-    _registered_arg_names[parser2] = set()
-
     # Register same arg_name for both parsers - should not raise
     _register_arg_name(parser1, "--config", "config")
     _register_arg_name(parser2, "--config", "config")
 
     # Verify both succeeded
-    assert "--config" in _registered_arg_names[parser1]
-    assert "--config" in _registered_arg_names[parser2]
+    assert _registry.is_arg_name_registered(parser1, "--config")
+    assert _registry.is_arg_name_registered(parser2, "--config")
 
   def test_error_message_format(self):
     """Test the complete error message format."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register an argument name
     _register_arg_name(parser, "--alias", "field_one")
@@ -169,39 +141,35 @@ class TestRegisterArgNameIntegration:
     _reset_factories()
 
   def test_reset_clears_registered_arg_names(self):
-    """Test that _reset_factories clears _registered_arg_names."""
+    """Test that _reset_factories clears the registry."""
     parser = argparse.ArgumentParser()
-
-    # Initialize the parser in _registered_arg_names
-    _registered_arg_names[parser] = set()
 
     # Register an argument name
     _register_arg_name(parser, "--test", "test")
 
     # Verify it's registered
-    assert "--test" in _registered_arg_names[parser]
+    assert _registry.is_arg_name_registered(parser, "--test")
 
     # Reset
     _reset_factories()
 
     # Verify it's cleared
-    assert parser not in _registered_arg_names
+    assert not _registry.is_arg_name_registered(parser, "--test")
 
   def test_registration_after_reset(self):
     """Test that registration works correctly after reset."""
     parser = argparse.ArgumentParser()
 
     # Register before reset
-    _registered_arg_names[parser] = set()
     _register_arg_name(parser, "--before-reset", "before")
 
     # Reset
     _reset_factories()
 
-    # Re-initialize and register after reset
-    _registered_arg_names[parser] = set()
+    # Register after reset
     _register_arg_name(parser, "--after-reset", "after")
 
     # Verify only the new registration exists
-    assert "--before-reset" not in _registered_arg_names[parser]
-    assert "--after-reset" in _registered_arg_names[parser]
+    assert not _registry.is_arg_name_registered(parser, "--before-reset")
+    assert _registry.is_arg_name_registered(parser, "--after-reset")
+
