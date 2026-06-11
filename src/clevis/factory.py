@@ -123,6 +123,25 @@ _registered_field_owners: dict[Parser, set[tuple[type, str]]] = {}
 _registered_arg_names: dict[Parser, set[str]] = {}
 
 
+def _register_arg_name(parser: Parser, arg_name: str, field_name: str) -> None:
+  """
+  Register an argument name and check for conflicts.
+
+  Args:
+    parser: The parser to register the argument name for
+    arg_name: The argument name to register (e.g., "--packages", "--with")
+    field_name: The field name for error messages
+
+  Raises:
+    ValueError: If the argument name is already registered for this parser
+  """
+  if arg_name in _registered_arg_names[parser]:
+    raise ValueError(
+      f"Alias '{arg_name}' conflicts with existing argument for field '{field_name}'"
+    )
+  _registered_arg_names[parser].add(arg_name)
+
+
 def _ensure_configured(parser: Parser) -> Parser:
   """
   Ensure a parser is fully configured by all factories that use it.
@@ -328,25 +347,15 @@ class Factory:
         if not isinstance(cli_aliases, list):
           cli_aliases = []
 
-        # Helper function to register an argument name and check for conflicts
-        def register_arg_name(arg_name: str, field_name: str) -> None:
-          """Register an argument name and check for conflicts."""
-          if arg_name in _registered_arg_names[target_parser]:
-            # Find which field already registered this argument
-            raise ValueError(
-              f"Alias '{arg_name}' conflicts with existing argument for field '{field_name}'"
-            )
-          _registered_arg_names[target_parser].add(arg_name)
-
         # Register canonical argument names
         if concrete_type is bool:
-          register_arg_name(f"--{cli_name}", name)
-          register_arg_name(f"--no-{cli_name}", name)
+          _register_arg_name(target_parser, f"--{cli_name}", name)
+          _register_arg_name(target_parser, f"--no-{cli_name}", name)
         elif origin is list:
-          register_arg_name(f"--{cli_name}", name)
-          register_arg_name(f"--no-{cli_name}", name)
+          _register_arg_name(target_parser, f"--{cli_name}", name)
+          _register_arg_name(target_parser, f"--no-{cli_name}", name)
         else:
-          register_arg_name(f"--{cli_name}", name)
+          _register_arg_name(target_parser, f"--{cli_name}", name)
 
         # Register alias argument names
         for alias in cli_aliases:
@@ -354,13 +363,13 @@ class Factory:
             continue
           # Alias replaces the entire cli_name (without prefixes)
           if concrete_type is bool:
-            register_arg_name(f"--{alias}", name)
-            register_arg_name(f"--no-{alias}", name)
+            _register_arg_name(target_parser, f"--{alias}", name)
+            _register_arg_name(target_parser, f"--no-{alias}", name)
           elif origin is list:
-            register_arg_name(f"--{alias}", name)
-            register_arg_name(f"--no-{alias}", name)
+            _register_arg_name(target_parser, f"--{alias}", name)
+            _register_arg_name(target_parser, f"--no-{alias}", name)
           else:
-            register_arg_name(f"--{alias}", name)
+            _register_arg_name(target_parser, f"--{alias}", name)
 
         # Add canonical arguments
         if concrete_type is bool:
@@ -601,4 +610,3 @@ def get_factory(clz: type) -> Factory:
     # create default factory
     _factories[clz] = Factory(clz)
     return _factories[clz]
-
