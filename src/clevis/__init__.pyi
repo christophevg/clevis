@@ -14,6 +14,12 @@ from typing import Any, Protocol, TypedDict, TypeVar
 
 T = TypeVar("T")
 
+# TOML Configuration File Constants
+
+TOML_EXT: str
+USER_CONFIG_TEMPLATE: str
+PROJECT_CONFIG_TEMPLATE: str
+
 # Security Types
 
 class SecurityAction(Enum):
@@ -311,3 +317,4 @@ def _reset_factories() -> None:
   Creates a fresh default parser.
   """
   ...
+

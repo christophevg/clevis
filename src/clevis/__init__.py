@@ -44,6 +44,18 @@ __version__ = "0.4.0"
 logger = logging.getLogger(__name__)
 
 
+# TOML Configuration File Constants
+
+TOML_EXT = ".toml"
+"""File extension for TOML files."""
+
+USER_CONFIG_TEMPLATE = ".{name}.toml"
+"""Template for user-level config files (e.g., ~/.clevis.toml)."""
+
+PROJECT_CONFIG_TEMPLATE = "{name}.toml"
+"""Template for project-level config files (e.g., ./clevis.toml)."""
+
+
 # Security Types
 
 
@@ -298,7 +310,7 @@ class ConfigError(Exception):
     lines.append("Provide this value in one of these ways:\n")
 
     # Project config
-    lines.append(f"  1. Project config: ./{self.config_name}.toml")
+    lines.append(f"  1. Project config: ./{PROJECT_CONFIG_TEMPLATE.format(name=self.config_name)}")
     parts = self.field_path.split(".")
     if len(parts) == 1:
       lines.append(f'     {parts[0]} = "your_value"')
@@ -308,7 +320,7 @@ class ConfigError(Exception):
     lines.append("")
 
     # User config
-    lines.append(f"  2. User config: ~/.{self.config_name}.toml")
+    lines.append(f"  2. User config: ~/{USER_CONFIG_TEMPLATE.format(name=self.config_name)}")
     lines.append("     (same format as above)\n")
 
     # CLI argument - only suggest when appropriate
@@ -482,8 +494,8 @@ def get_config(
   cfg: dict[str, Any] = {}
 
   # Get config file paths
-  user_config = Path.home() / f".{name}.toml"
-  project_config = Path.cwd() / f"{name}.toml"
+  user_config = Path.home() / USER_CONFIG_TEMPLATE.format(name=name)
+  project_config = Path.cwd() / PROJECT_CONFIG_TEMPLATE.format(name=name)
 
   # Validate security and load config files
   # Note: TOCTOU-safe file permission checks
@@ -635,3 +647,4 @@ __all__ = [
   "unpack_type",
   "_reset_factories",
 ]
+
