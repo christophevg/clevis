@@ -245,7 +245,7 @@ chmod 600 ~/.myapp.toml
 
 ## Examples Showcase
 
-The `examples/` directory contains 9 comprehensive examples:
+The `examples/` directory contains 10 comprehensive examples:
 
 | Example | Features Demonstrated | Run Command |
 |---------|----------------------|-------------|
@@ -255,6 +255,7 @@ The `examples/` directory contains 9 comprehensive examples:
 | **[environment.py](examples/environment.py)** | `${VAR}` interpolation, credentials | `export DB_HOST=localhost && uv run python environment.py` |
 | **[factory.py](examples/factory.py)** | Multi-module orchestration, prefixes | `uv run python factory.py --app1-name "first"` |
 | **[commands.py](examples/commands.py)** | CLI subcommands, aliases | `uv run python commands.py check --verbose` |
+| **[subcommands.py](examples/subcommands.py)** | TOML override with `config` parameter | `uv run python subcommands.py cli --server-url "https://api.example.com"` |
 | **[library_mode.py](examples/library_mode.py)** | Web framework integration, testing | `uv run python library_mode.py` |
 | **[dynamic.py](examples/dynamic.py)** | Plugin architecture, `register_field()` | `uv run python dynamic.py --help` |
 | **[plugin.py](examples/plugin.py)** | Practical plugin implementation | `uv run python plugin.py --pkgq-timeout 60` |
@@ -404,6 +405,105 @@ python app.py --tools-pkgq-enabled --tools-pkgq-timeout 90
 ```
 
 See [examples/dynamic.py](examples/dynamic.py) and [examples/plugin.py](examples/plugin.py) for complete examples.
+
+### Plugin Configuration
+
+When building plugin systems, you need a parent config that plugins can register to:
+
+**Parent Config Design:**
+
+```python
+from dataclasses import dataclass, field
+
+# Parent config must NOT be frozen
+@dataclass
+class ToolsConfig:
+  """Container for tool configurations."""
+  list: str = "default"
+
+# Plugin defines its config
+@dataclass
+class PkgqToolConfig:
+  enabled: bool = True
+  timeout: int = 30
+
+# Plugin registers itself
+from clevis import register_field
+register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+```
+
+**TOML Section Naming:**
+
+Registered fields create TOML sections using the registered field name:
+
+```toml
+[tools.list]
+format = "json"
+
+[tools.pkgq]  # Field name becomes section name
+enabled = true
+timeout = 60
+```
+
+**CLI Argument Naming:**
+
+Nested registered fields use dashed CLI arguments:
+
+```bash
+# Pattern: --{parent}-{field}-{option}
+python app.py --tools-pkgq-enabled --tools-pkgq-timeout 90
+
+# For deeply nested:
+# register_field(AppConfig, "tools", ToolsConfig)
+# register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+# Result: --tools-pkgq-timeout
+```
+
+**Complete Plugin Example:**
+
+```python
+from dataclasses import dataclass, field
+from clevis import configclass, get_config, register_field, SecurityAction
+
+# Application defines parent config
+@dataclass
+class ToolsConfig:
+  list: str = "default"
+
+@configclass
+class AppConfig:
+  name: str = "myapp"
+  tools: ToolsConfig = field(default_factory=ToolsConfig)
+
+# Plugin module defines and registers its config
+@dataclass
+class PkgqToolConfig:
+  enabled: bool = True
+  timeout: int = 30
+
+register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+# Both application and plugin config work together
+config = get_config(
+  AppConfig,
+  name="app",
+  security={"file_permissions": SecurityAction.LOG}
+)
+
+print(config.name)           # "myapp"
+print(config.tools.list)     # "default"
+print(config.tools.pkgq.enabled)  # True
+```
+
+**Best Practices:**
+
+1. **Non-frozen parent** — Use `@dataclass` without `frozen=True`
+2. **Early registration** — Call `register_field()` before `get_config()`
+3. **Descriptive names** — Field names become TOML section names
+4. **Document registration** — Comment which plugins register to which parents
+5. **Security settings** — Use `SecurityAction.LOG` during development
+
+See [examples/plugin.py](examples/plugin.py) for a production-ready plugin implementation.
 
 ### Custom Validation
 

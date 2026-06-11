@@ -826,6 +826,190 @@ config = get_config(
 )
 ```
 
+### Dynamic Field Registration
+
+Use `register_field()` to add configuration fields at runtime for plugin architectures:
+
+```python
+from dataclasses import dataclass, field
+from clevis import register_field, get_config, SecurityAction
+
+# Parent config (must NOT be frozen)
+@dataclass
+class ToolsConfig:
+  """Container for tool configurations."""
+  list: str = "default"
+
+# Plugin config to be registered
+@dataclass
+class PkgqToolConfig:
+  """Configuration for pkgq tool plugin."""
+  enabled: bool = True
+  timeout: int = 30
+  cache_directory: str = "~/.cache/pkgq"
+
+# Register the plugin's config as a field
+register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+# Now ToolsConfig has a pkgq field
+config = ToolsConfig()
+print(config.pkgq.enabled)  # True
+print(config.pkgq.timeout)  # 30
+```
+
+**TOML Configuration:**
+
+Registered fields work seamlessly with TOML files:
+
+```toml
+[tools]
+list = "custom"
+
+[tools.pkgq]
+enabled = true
+timeout = 60
+cache_directory = "/custom/cache"
+```
+
+```python
+# Load with registered field
+config = get_config(
+  ToolsConfig,
+  name="tools",
+  security={"file_permissions": SecurityAction.LOG}
+)
+print(config.pkgq.timeout)  # 60 (from TOML)
+```
+
+**CLI Arguments:**
+
+Registered fields generate CLI arguments with nested naming:
+
+```bash
+python app.py --tools-pkgq-enabled --tools-pkgq-timeout 90
+```
+
+**Error Handling:**
+
+```python
+# Error: Parent class is frozen
+@dataclass(frozen=True)
+class FrozenConfig:
+  name: str = "default"
+
+register_field(FrozenConfig, "plugin", PluginConfig)
+# Raises TypeError: Cannot register field to frozen dataclass
+
+# Error: Field name already exists
+register_field(ToolsConfig, "pkgq", AnotherConfig)
+# Raises ValueError: Field 'pkgq' already exists
+
+# Error: Late registration (after get_config with CLI)
+config = get_config(Config, name="app")
+register_field(Config, "plugin", PluginConfig)
+# Raises RuntimeError: Cannot register field after CLI configuration
+```
+
+**Plugin Architecture Pattern:**
+
+```python
+# Main application (NOT frozen for plugin registration)
+@dataclass
+class ToolsConfig:
+  list: str = "default"
+
+# Plugin module (separate file/package)
+@dataclass
+class PkgqToolConfig:
+  enabled: bool = True
+  timeout: int = 30
+
+# Plugin loader registers itself
+def load_plugins():
+  register_field(ToolsConfig, "pkgq", PkgqToolConfig)
+
+# Application loads plugins before configuration
+load_plugins()
+config = get_config(ToolsConfig, name="tools")
+```
+
+**Best Practices:**
+
+1. Use `@dataclass` (NOT `frozen=True`) for parent configs
+2. Call `register_field()` before `get_config()`
+3. TOML sections follow hierarchy: `[parent.field]`
+4. CLI args use dashed names: `--parent-field-option`
+5. Plugins can register to multiple parent configs
+
+See `examples/plugin.py` and `examples/dynamic.py` for complete examples.
+
+### Subcommands with TOML Override
+
+Use the `config` parameter in `@configclass()` to read from a different TOML section than the command name:
+
+```python
+from dataclasses import dataclass
+from clevis import configclass, get_cmd, get_config
+
+# Base configuration shared by multiple subcommands
+@dataclass
+class ClientConfig:
+  server_url: str = "http://localhost:8000"
+  timeout: int = 30
+
+# Subcommand reads from [client] section (not [cli])
+@configclass(cmd="cli", config="client", help="Run CLI client")
+class CliConfig(ClientConfig):
+  pass
+
+# Subcommand reads from [client] section (not [tui])
+@configclass(cmd="tui", config="client", help="Run TUI client")
+class TUIConfig(ClientConfig):
+  pass
+```
+
+**TOML Configuration:**
+
+Both subcommands read from the same TOML section:
+
+```toml
+[client]
+server_url = "https://api.example.com"
+timeout = 30
+
+# Both 'cli' and 'tui' commands read from [client]
+# because they use config="client"
+```
+
+**CLI Usage:**
+
+```bash
+# Both subcommands use the same TOML section
+python app.py cli --server-url "https://api.example.com"
+python app.py tui --server-url "https://api.example.com"
+```
+
+**Use Cases:**
+
+1. **Multiple interfaces, shared config** — CLI and TUI interfaces with same settings
+2. **Environment-specific config** — Development/production with same structure
+3. **Shared configuration** — Multiple commands reading from common config section
+
+**Dispatch Pattern:**
+
+```python
+if __name__ == "__main__":
+  cmd = get_cmd()
+  if cmd == "cli":
+    config = get_config(CliConfig)
+    print(f"CLI: {config.server_url}")
+  elif cmd == "tui":
+    config = get_config(TUIConfig)
+    print(f"TUI: {config.server_url}")
+```
+
+See `examples/subcommands.py` for a complete example.
+
 ## TOML Parser Selection
 
 Clevis automatically selects the best available TOML parser:
