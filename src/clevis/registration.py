@@ -252,4 +252,3 @@ def _update_repr(cls: type) -> None:
 
   # Replace __repr__
   cls.__repr__ = __repr__  # type: ignore[method-assign, assignment]
-

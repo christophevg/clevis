@@ -161,4 +161,3 @@ def configclass(
     # The decorator was used as @configclass(cmd="check") or similar
     # Return a function that takes the class and applies the decorator
     return lambda clz: decorator(clz)
-

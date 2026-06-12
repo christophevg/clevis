@@ -738,4 +738,3 @@ def get_factory(clz: type) -> Factory:
     # create default factory
     _factories[clz] = Factory(clz)
     return _factories[clz]
-
