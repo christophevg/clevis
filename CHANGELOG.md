@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 (2026-06-12)
+
+### Added
+
+- **CLI Argument Aliases**: Support for short-form CLI arguments via `metadata["cli_aliases"]`
+  - Define multiple names for the same argument (e.g., `["-v", "--verbose"]`)
+  - Improved CLI ergonomics for frequently used options
+- **List-Append CLI Behavior**: Intelligent merging of CLI list arguments with TOML configuration
+  - `--field X --field Y` appends values to TOML base
+  - `--no-field` clears the list (sets to empty)
+  - Automatic list field detection and merging
+- **Dynamic Field Registration**: Runtime field registration for plugin architectures
+  - `register_field()` function to add fields after dataclass definition
+  - Enables plugin systems that extend configuration schema
+  - Field owner tracking for introspection
+- **Security Parameter**: File permission validation configuration
+  - `SecurityAction` enum: `DONT_CHECK`, `LOG`, `REJECT`
+  - `SecurityConfig` typed dict for granular control
+  - TOCTOU-safe checks using file descriptors
+- **Factory Pattern**: Multi-module orchestration support
+  - `get_factory(clz)` returns singleton Factory for each config class
+  - `@configclass` decorator combines `@dataclass` with factory registration
+  - Custom prefix and parser configuration per class
+- **Subcommand Support**: CLI subcommands with help and aliases
+  - `cmd`, `help`, and `aliases` parameters in `@configclass`
+  - `get_cmd()` function to retrieve active subcommand
+  - Proper TOML section extraction for subcommands
+
+### Changed
+
+- **Test Coverage**: Achieved 92% test coverage
+- **Code Quality Polish**:
+  - Refactored ParserRegistry for cleaner API
+  - Lazy initialization improvements
+  - Extracted constants and helper functions
+- **Documentation**: Consolidated and improved documentation structure
+
 ## 0.4.0 (2026-06-09)
 
 ### Added
