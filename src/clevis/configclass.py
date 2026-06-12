@@ -82,11 +82,11 @@ def configclass(
     class CheckConfig:
       verbose: bool = False
 
-  For config extraction without CLI subcommand::
+  For TOML section override::
 
-    @configclass(config="output")
-    class OutputConfig:
-      rich: bool = False
+    @configclass(cmd="cli", config="client")
+    class CliConfig:
+      server_url: str = "http://localhost:8000"
 
   Args:
     cls: The class to decorate.
