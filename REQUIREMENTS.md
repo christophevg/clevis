@@ -34,27 +34,27 @@ This document tracks the source-of-truth requirements for Clevis. Each requireme
 
 ### Factory Pattern (P2-001, issue #3)
 
-The Factory pattern enables three use cases:
+The Factory pattern enables four use cases:
 
 1. **Simple case**: Direct `get_config()` call with auto-discovered parser
 2. **Module development**: Pre-register configs with `@configclass` decorator
 3. **Multi-module orchestration**: Shared parser with prefixes, custom parser injection
 4. **Subcommands**: CLI applications with multiple commands (like `git`, `docker`)
 
-- [ ] R20: `@configclass` decorator registers dataclass with Clevis factory system
-- [ ] R21: `get_factory(Config)` returns Factory instance for configuration customization
-- [ ] R22: `Factory.prefix` applies CLI argument prefix (e.g., "app1" -> "--app1-name")
-- [ ] R23: `Factory.parser` allows custom or shared parser injection
-- [ ] R24: Lazy parser configuration - parser configured on first `get_config()` call
-- [ ] R25: `Factory.list_fields()` exposes field structure for introspection
-- [ ] R26: `Factory.get_args()` returns parsed CLI arguments as dict with dotted keys
-- [ ] R27: Parser Protocol for pluggable argument parsers (argparse-compatible)
-- [ ] R28: Multiple configs can share one parser for orchestrated CLI
-- [ ] R29: `@configclass(cmd="name")` registers config as subcommand
-- [ ] R30: `get_cmd()` returns the active subcommand name
-- [ ] R31: SubParser Protocol for subparser operations
-- [ ] R32: `get_sub_parser(parser)` creates or returns existing subparser
-- [ ] R33: Subcommand-specific arguments parsed correctly for each config
+- [x] R20: `@configclass` decorator registers dataclass with Clevis factory system
+- [x] R21: `get_factory(Config)` returns Factory instance for configuration customization
+- [x] R22: `Factory.prefix` applies CLI argument prefix (e.g., "app1" -> "--app1-name")
+- [x] R23: `Factory.parser` allows custom or shared parser injection
+- [x] R24: Lazy parser configuration - parser configured on first `get_config()` call
+- [x] R25: `Factory.list_fields()` exposes field structure for introspection
+- [x] R26: `Factory.get_args()` returns parsed CLI arguments as dict with dotted keys
+- [x] R27: Parser Protocol for pluggable argument parsers (argparse-compatible)
+- [x] R28: Multiple configs can share one parser for orchestrated CLI
+- [x] R29: `@configclass(cmd="name")` registers config as subcommand
+- [x] R30: `get_cmd()` returns the active subcommand name
+- [x] R31: SubParser Protocol for subparser operations
+- [x] R32: `get_sub_parser(parser)` creates or returns existing subparser
+- [x] R33: Subcommand-specific arguments parsed correctly for each config
 
 ### Error Handling
 
@@ -66,59 +66,59 @@ The Factory pattern enables three use cases:
 
 ### Security (P2-002, issue #4)
 
-- [ ] R39: Optional `security` argument to `get_config()`
-- [ ] R40: Default security policy is maximally strict (reject on security issues)
-- [ ] R41: Per-check options: Don't Check | Log | Reject
-- [ ] R42: Configuration file permission validation (group/other readable)
-- [ ] R43: Parent directory security validation (world-writable)
+- [x] R39: Optional `security` argument to `get_config()`
+- [x] R40: Default security policy is maximally strict (reject on security issues)
+- [x] R41: Per-check options: Don't Check | Log | Reject
+- [x] R42: Configuration file permission validation (group/other readable)
+- [x] R43: Parent directory security validation (world-writable)
 
 ### Dynamic Field Registration (P2-007, issues #10 and #11)
 
 Enable plugin architectures to inject configuration fields at runtime.
 
-- [ ] R100: `register_field(parent, name, field_type)` adds field to parent dataclass
-- [ ] R101: Registered fields derive TOML namespace from parent hierarchy automatically
-- [ ] R102: Registered fields generate CLI args with dotted path (`--parent-name-field`)
-- [ ] R103: `register_field()` raises `TypeError` for frozen parent dataclass
-- [ ] R104: `register_field()` raises `ValueError` for duplicate field name
-- [ ] R105: `register_field()` raises `RuntimeError` if called after `get_config()`
-- [ ] R106: Parent must be non-frozen dataclass to accept dynamic fields
-- [ ] R107: `@configclass(config=...)` requires `cmd` parameter (validation)
-- [ ] R108: Documentation covers all 6 use cases with examples
-- [ ] R109: Tests cover dynamic registration, error cases, backward compatibility
+- [x] R100: `register_field(parent, name, field_type)` adds field to parent dataclass
+- [x] R101: Registered fields derive TOML namespace from parent hierarchy automatically
+- [x] R102: Registered fields generate CLI args with dotted path (`--parent-name-field`)
+- [x] R103: `register_field()` raises `TypeError` for frozen parent dataclass
+- [x] R104: `register_field()` raises `ValueError` for duplicate field name
+- [x] R105: `register_field()` raises `RuntimeError` if called after `get_config()`
+- [x] R106: Parent must be non-frozen dataclass to accept dynamic fields
+- [x] R107: `@configclass(config=...)` requires `cmd` parameter (validation)
+- [x] R108: Documentation covers all use cases with examples
+- [x] R109: Tests cover dynamic registration, error cases, backward compatibility
 
 ### List-Append CLI Behavior (P2-011, issue #14)
 
 Support for accumulative CLI arguments for list types and negative boolean flags.
 
-- [ ] R110: `list[T]` fields support `--field value` multiple times with append behavior
-- [ ] R111: `--no-field` prefix sets field to empty list (for list types)
-- [ ] R112: `--no-field` prefix sets boolean fields to False (in addition to `--field` setting to True)
-- [ ] R113: CLI values merge with TOML values (append semantics, not replace)
-- [ ] R114: Works for all list types (`list[str]`, `list[int]`, etc.)
+- [x] R110: `list[T]` fields support `--field value` multiple times with append behavior
+- [x] R111: `--no-field` prefix sets field to empty list (for list types)
+- [x] R112: `--no-field` prefix sets boolean fields to False (in addition to `--field` setting to True)
+- [x] R113: CLI values merge with TOML values (append semantics, not replace)
+- [x] R114: Works for all list types (`list[str]`, `list[int]`, etc.)
 
 ### CLI Argument Aliases (P2-012, issue #13)
 
 Support alternative CLI argument names for config fields.
 
-- [ ] R115: Config fields support alternative CLI argument names via `metadata={"cli_aliases": ["alias"]}`
-- [ ] R116: Multiple aliases supported per field
-- [ ] R117: Aliases replace entire argument name including prefixes (nested: `tools.packages` with alias `with` creates `--tools-with`)
-- [ ] R118: Aliases merge same as original argument name
-- [ ] R119: Error raised if alias conflicts with existing field name
+- [x] R115: Config fields support alternative CLI argument names via `metadata={"cli_aliases": ["alias"]}`
+- [x] R116: Multiple aliases supported per field
+- [x] R117: Aliases replace entire argument name including prefixes (nested: `tools.packages` with alias `with` creates `--tools-with`)
+- [x] R118: Aliases merge same as original argument name
+- [x] R119: Error raised if alias conflicts with existing field name
 
 ## Non-Functional Requirements
 
 ### Code Quality
 
-- [ ] R44: 90%+ test coverage (currently ~80%)
+- [x] R44: 90%+ test coverage (currently ~80%)
 - [x] R45: Full type hints on all public functions
 - [x] R46: Docstrings on all public functions
 - [x] R47: Code style compliance (ruff/mypy)
-- [ ] R48: Type-preservation tests for argparse with complex union types (>2 types)
-- [ ] R49: `__init__.pyi` type stub file for IDE support
-- [ ] R50: Remove duplicate imports (typing.Callable imported twice)
-- [ ] R51: `_reset_factories()` must reset `_sub_parsers` global
+- [x] R48: Type-preservation tests for argparse with complex union types (>2 types)
+- [x] R49: `__init__.pyi` type stub file for IDE support
+- [x] R50: Remove duplicate imports (typing.Callable imported twice)
+- [x] R51: `_reset_factories()` must reset `_sub_parsers` global
 
 ### Documentation
 
@@ -126,11 +126,11 @@ Support alternative CLI argument names for config fields.
 - [x] R53: docs/conf.py for Sphinx/ReadTheDocs
 - [x] R54: docs/index.rst with toctree
 - [x] R55: docs/installation.rst
-- [ ] R56: docs/usage.rst with Factory pattern and subcommand documentation
+- [x] R56: docs/usage.rst with Factory pattern and subcommand documentation
 - [x] R57: docs/api.rst
-- [ ] R58: Cookbook entries for nested configs, env vars, and custom validation patterns
-- [ ] R59: Add `help` parameter to `@configclass(cmd=...)` for subcommand help text
-- [ ] R60: Add `aliases` parameter to `@configclass(cmd=...)` for subcommand aliases
+- [x] R58: Cookbook entries for nested configs, env vars, and custom validation patterns
+- [x] R59: Add `help` parameter to `@configclass(cmd=...)` for subcommand help text
+- [x] R60: Add `aliases` parameter to `@configclass(cmd=...)` for subcommand aliases
 
 ### Project Infrastructure
 
@@ -148,32 +148,32 @@ Support alternative CLI argument names for config fields.
 - [x] R69: Makefile has pre-publish checks
 - [x] R70: Makefile has publish target
 - [x] R71: PyPI badges in README.md
-- [x] R72: PyPI publication (0.2.0)
+- [x] R72: PyPI publication (0.4.0)
 
 ### Testing
 
 - [x] R73: Unit tests for core functionality
 - [x] R74: Unit tests for parser selection
-- [ ] R75: Tests for parser fallback branches (tomlev, tomli, tomllib)
-- [ ] R76: Tests for error handling branches (WrongTypeError, DaciteError)
-- [ ] R77: Tests for user-level config loading (~/.{name}.toml)
-- [ ] R78: Tests for boolean CLI arguments (store_true)
-- [ ] R79: Tests for `@configclass` decorator
-- [ ] R80: Tests for `get_factory()` function
-- [ ] R81: Tests for `Factory.prefix` application
-- [ ] R82: Tests for shared parser (multiple configs, one parser)
-- [ ] R83: Tests for lazy parser configuration
-- [ ] R84: Tests for `Factory.get_args()` with prefix stripping
-- [ ] R85: Tests for `_reset_factories()` test isolation
-- [ ] R86: Tests for `@configclass(cmd="name")` subcommand registration
-- [ ] R87: Tests for `get_cmd()` returns correct command
-- [ ] R88: Tests for subcommand arguments parsed correctly
-- [ ] R89: Tests for multiple subcommands working together
-- [ ] R90: Tests for `_reset_factories()` clearing `_sub_parsers`
+- [x] R75: Tests for parser fallback branches (tomlev, tomli, tomllib)
+- [x] R76: Tests for error handling branches (WrongTypeError, DaciteError)
+- [x] R77: Tests for user-level config loading (~/.{name}.toml)
+- [x] R78: Tests for boolean CLI arguments (store_true)
+- [x] R79: Tests for `@configclass` decorator
+- [x] R80: Tests for `get_factory()` function
+- [x] R81: Tests for `Factory.prefix` application
+- [x] R82: Tests for shared parser (multiple configs, one parser)
+- [x] R83: Tests for lazy parser configuration
+- [x] R84: Tests for `Factory.get_args()` with prefix stripping
+- [x] R85: Tests for `_reset_factories()` test isolation
+- [x] R86: Tests for `@configclass(cmd="name")` subcommand registration
+- [x] R87: Tests for `get_cmd()` returns correct command
+- [x] R88: Tests for subcommand arguments parsed correctly
+- [x] R89: Tests for multiple subcommands working together
+- [x] R90: Tests for `_reset_factories()` clearing `_sub_parsers`
 
 ### Repository Hygiene
 
-- [ ] R91: `project.toml` file resolved (moved/renamed/gitignored) — purpose clear
+- [x] R91: `project.toml` file resolved (moved/renamed/gitignored) — purpose clear
 - [ ] R92: `examples/commands.py` example working and documented
 
 ## Completed
@@ -182,5 +182,24 @@ The following requirements were satisfied by prior tasks. They are kept here for
 
 - [x] R1-R19 (core features, parser support, CLI integration) — Iteration 1, delivered in v0.1.0
 - [x] R34-R38 (error handling) — Iteration 1, delivered in v0.1.0
-- [x] R45-R47, R52-H55, R57, R61-H67, R68-H72, R73-R74 — Iteration 1-2 (P1-001, P1-002, P1-003)
+- [x] R20-R33 (factory pattern, subcommands) — P2-001, delivered in v0.2.0
+- [x] R39-R43 (security) — P2-002, delivered in v0.3.0
+- [x] R49 (type stub) — P2-004, delivered in v0.4.0
+- [x] R50-R51 (code quality) — P2-001, delivered in v0.2.0
+- [x] R58-R60 (documentation) — P2-005, P2-006, delivered in v0.4.0
+- [x] R45-H47, R52-H57, R61-H67, R68-H72, R73-R74 — Iteration 1-2 (P1-001, P1-002, P1-003)
+- [x] R100-R109 (dynamic field registration) — P2-007, P2-008, P2-009, P2-010, delivered in v0.4.0
+- [x] R110-R114 (list-append behavior) — P2-011, delivered in v0.4.0
+- [x] R115-R119 (CLI argument aliases) — P2-012, delivered in v0.4.0
+- [x] R79-R90 (factory tests) — P2-001, delivered in v0.2.0
+- [x] R91 (project.toml resolved) — P2-001, delivered in v0.2.0
+- [x] R44, R48, R75-R78 (test coverage) — P3-004, delivered in v0.4.1 (2026-06-11)
 - [x] Initial PyPI publication at v0.2.0 — P1-003 closed
+- [x] v0.4.0 release — All Phase 2 tasks completed (2026-06-11)
+- [x] v0.4.1 release — Phase 3 & 4 polish tasks completed (2026-06-11)
+
+## Won't Fix
+
+Requirements reviewed and rejected with documented rationale.
+
+- **P2-013**: Fix overly broad exception handling. The `except BaseException:` pattern at `__init__.py:131` is intentional for resource cleanup. It catches `KeyboardInterrupt`, `SystemExit`, and `GeneratorExit` to properly close file descriptors. Changing to `except Exception:` would cause resource leaks for system exceptions. **Rationale documented in TODO.md and code comments.** (PR #19 - closed)
