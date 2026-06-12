@@ -80,4 +80,5 @@ env_list = ["py310", "py311", "py312"]
 [tool.tox.env_run_base]
 description = "Run tests under {base_python}"
 deps = ["pytest", "pytest-cov"]
-commands = [["pytest", "-v", "--cov=src", "--cov-report=term-missing"]]
+extras = ["envtoml", "tomli", "tomlev"]
+commands = [["pytest", "-v", "--cov=clevis", "--cov-report=term-missing"]]
