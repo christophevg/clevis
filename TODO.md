@@ -4,6 +4,29 @@ This is the prioritized backlog. Phases group tasks by priority. Each task is at
 
 ## Backlog
 
+### Phase 1.5: CLI Field Exclusion (P1 - Critical)
+
+Blocks another project. Owner directive: ensure the exclusion point is centralized cleanly — think deeply about the design before making changes; avoid scattering function calls.
+
+- [ ] **P1-004: Support excluding dataclass fields from CLI argument generation**
+  - Add metadata-based `cli=False` exclusion for dataclass fields so they are skipped during CLI argument generation while remaining loadable via config/TOML/env/defaults.
+  - **GitHub Issue**: #30 — https://github.com/christophevg/clevis/issues/30
+  - **Priority**: P1 — Critical (another project is blocked on this)
+  - **Owner directive (verbatim)**: "Ensure that any refactoring to create a single exclusion point is done cleanly, avoid calling functions all over the place: think deeply about the design before making changes!"
+  - **Acceptance**:
+    - [ ] 1. Single exclusion point: metadata-based CLI exclusion is handled in one centralized, cleanly designed place, applied consistently across `_configure_fields()`, `list_fields()`, `list_fields_with_owners()`, and any other field-list consumer. A single shared helper (e.g., a `_should_exclude_cli(field)` predicate or shared field-filtering function) is used by all consumers — no scattered function calls.
+    - [ ] 2. Trigger condition: exclusion triggers only on `metadata["cli"] is False` (explicit `False`, not general falsy values like `0`, `""`, `None`). Absence of the key means "include."
+    - [ ] 3. Scope — any field level: applies to both leaf fields and nested-dataclass fields.
+      - Leaf field with `cli=False`: the CLI argument is skipped.
+      - Nested-dataclass field with `cli=False`: the entire subtree is skipped (no recursion into the nested class).
+    - [ ] 4. Alias suppression: a field with `cli=False` also suppresses any `metadata["cli_aliases"]` registration — no `--<alias>` arguments are generated.
+    - [ ] 5. Dynamic registration: `register_field()` in `registration.py` is extended to accept optional metadata, so plugins can mark a dynamically registered field as `cli=False`. Currently `register_field()` creates fields with `metadata={}`.
+    - [ ] 6. Regression safety: existing fields without `metadata["cli"]` (or with non-`False` values) behave unchanged.
+    - [ ] 7. Tests cover: leaf exclusion, nested-subtree exclusion (no recursion), alias suppression, dynamic registration via `register_field()`, and a secret-field scenario demonstrating the field is absent from `sys.argv`-derived parsing while still loadable via config/TOML/env/defaults.
+  - **Implementation notes**:
+    - The issue's original text preferred `list_fields()` as the exclusion site, but `configure_parser()` recurses through `_configure_fields()` (which does not call `list_fields()`). The exclusion must be centralized so it covers both code paths.
+    - Relevant files: `src/clevis/factory.py` (`configure_parser`, `_configure_fields`, `list_fields`, `list_fields_with_owners`), `src/clevis/registration.py` (`register_field`), `src/clevis/configclass.py`, `tests/test_cli_aliases.py` (existing metadata-based test pattern).
+
 ### Phase 2: Dynamic Field Registration (P2 - High) - COMPLETE ✅
 
 Plugin configuration support for architectures like Yoker.
