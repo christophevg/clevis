@@ -52,6 +52,7 @@ from clevis.factory import (
   Parser,
   SubParser,
   _ensure_configured,
+  _is_cli_excluded,
   _reset_factories,
   apply_to_dict,
   get_factory,
@@ -353,6 +354,43 @@ class ConfigError(Exception):
     return "\n".join(lines)
 
 
+def _is_field_path_excluded(clz: type, field_path: str) -> bool:
+  """
+  Check whether a dotted field path is excluded from the CLI subsystem.
+
+  Walks the dataclass hierarchy following ``field_path`` and returns True if
+  any field along the path has ``metadata["cli"] is False``. This uses the
+  centralized ``_is_cli_excluded`` predicate so there is a single definition of
+  "excluded." Used by the ConfigError path to decide whether to suppress the
+  CLI argument suggestion (``suggest_cli=False``) for excluded fields.
+
+  Args:
+    clz: The root dataclass type.
+    field_path: Dotted path like "database.host" or "secret".
+
+  Returns:
+    True if the field or any ancestor in the path is excluded from CLI.
+  """
+  parts = field_path.split(".")
+  current: type = clz
+  for index, part in enumerate(parts):
+    found = None
+    for f in fields(current):
+      if f.name == part:
+        found = f
+        break
+    if found is None:
+      return False
+    if _is_cli_excluded(found):
+      return True
+    if index < len(parts) - 1:
+      concrete_type = unpack_type(found.type)  # type: ignore[arg-type]
+      if not is_dataclass(concrete_type):
+        return False
+      current = concrete_type
+  return False
+
+
 def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   """
   Get the active subcommand name from parsed arguments.
@@ -619,7 +657,7 @@ def get_config(
       message="Required field has no value",
       field_path=field_path,
       config_name=name,
-      suggest_cli=cli,
+      suggest_cli=cli and not _is_field_path_excluded(clz, field_path),
     ) from None
   except WrongTypeError as e:
     # Extract field path and type info from dacite error
@@ -632,7 +670,7 @@ def get_config(
       message="Wrong type for field",
       field_path=field_path,
       config_name=name,
-      suggest_cli=cli,
+      suggest_cli=cli and not _is_field_path_excluded(clz, field_path),
     ) from None
   except DaciteError as e:
     # Catch any other dacite errors
@@ -664,7 +702,7 @@ def get_config(
                 message=f"Required nested field '{arg_name}' has no value",
                 field_path=field_path,
                 config_name=name,
-                suggest_cli=cli,
+                suggest_cli=cli and not _is_field_path_excluded(clz, field_path),
               ) from None
     # Fallback if we can't parse the error
     raise ConfigError(
