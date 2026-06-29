@@ -26,6 +26,7 @@ Blocks another project. Owner directive: ensure the exclusion point is centraliz
   - **Implementation notes**:
     - The issue's original text preferred `list_fields()` as the exclusion site, but `configure_parser()` recurses through `_configure_fields()` (which does not call `list_fields()`). The exclusion must be centralized so it covers both code paths.
     - Relevant files: `src/clevis/factory.py` (`configure_parser`, `_configure_fields`, `list_fields`, `list_fields_with_owners`), `src/clevis/registration.py` (`register_field`), `src/clevis/configclass.py`, `tests/test_cli_aliases.py` (existing metadata-based test pattern).
+  - **Status**: Implementation complete, PR #31 ready for review — https://github.com/christophevg/clevis/pull/31
 
 ### Phase 2: Dynamic Field Registration (P2 - High) - COMPLETE ✅
 
