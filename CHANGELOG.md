@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0 (2026-06-29)
+
+### Added
+
+- **CLI Field Exclusion**: Dataclass fields can now be hidden from CLI argument generation
+  - Set `metadata={"cli": False}` on a dataclass field to exclude it from the CLI
+  - Field remains loadable via TOML, env, and defaults; only CLI args are suppressed
+  - Nested dataclass fields with `cli=False` skip the entire subtree
+- **register_field metadata parameter**: `register_field()` gained a keyword-only `metadata` param
+  - Pass `{"cli": False}` to register runtime fields excluded from CLI
+  - Defaults to `{}`, preserving previous behavior (backward compatible)
+
+### Changed
+
+- **Single CLI Walker**: Refactored field enumeration into a single `_iter_cli_fields` walker
+  - One source of truth for CLI-visible fields; all consumers (parser config, `list_fields`, `list_fields_with_owners`) route through it
+  - Exclusion logic centralized in `_is_cli_excluded` (strict `is False` identity check)
+- **ConfigError suggest_cli hardening**: CLI suggestions in error messages are now suppressed for excluded field paths via `_is_field_path_excluded`
+
 ## 0.5.0 (2026-06-12)
 
 ### Added

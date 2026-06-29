@@ -61,7 +61,7 @@ from clevis.factory import (
 )
 from clevis.registration import register_field
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 logger = logging.getLogger(__name__)
 
