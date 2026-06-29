@@ -34,6 +34,7 @@ Lazy Configuration:
 
 import argparse
 from argparse import Action, Namespace
+from collections.abc import Iterator
 from dataclasses import Field, dataclass, field, fields, is_dataclass
 from typing import Any, Literal, Protocol, Union, get_args, get_origin
 
@@ -248,6 +249,68 @@ def unpack_type(type_def: type) -> type:
   return type_def
 
 
+def _is_cli_excluded(f: Field[Any]) -> bool:
+  """
+  Return True iff this field must be hidden from the CLI subsystem.
+
+  Triggers ONLY on an explicit False (strict identity check):
+    metadata["cli"] is False  -> True  (exclude)
+    metadata["cli"] absent     -> False (include)
+    metadata["cli"] is None    -> False (include; None is not False)
+    metadata["cli"] == 0       -> False (include; 0 is not False)
+    metadata["cli"] == ""      -> False (include; "" is not False)
+    metadata["cli"] is True    -> False (include)
+
+  This is the ONLY predicate that decides CLI visibility. It is used by:
+    - the ``_iter_cli_fields`` walker (driving parser configuration and
+      field listing), and
+    - ``_is_field_path_excluded`` in ``__init__.py`` for the
+      ``suggest_cli=False`` point-query along a specific dotted path
+      (ConfigError suggestion suppression).
+  """
+  return f.metadata.get("cli", True) is False
+
+
+def _iter_cli_fields(
+  clz: type,
+  path: list[str] | None = None,
+  owner: type | None = None,
+) -> Iterator[tuple[Any, ...]]:
+  """
+  Single source of truth for fields visible to the CLI subsystem.
+
+  Yields tagged tuples so consumers can dispatch on entry kind:
+    ("leaf", field, path, owner_class)
+        a leaf field (non-dataclass) visible to CLI.
+    ("nested", field, path, owner_class, concrete_type)
+        a nested-dataclass field visible to CLI; its children follow
+        immediately in the stream.
+
+  Exclusion rules (enforced in exactly one ``continue`` statement):
+    - Leaf field with metadata["cli"] is False  -> skipped (not yielded).
+    - Nested-dataclass field with metadata["cli"] is False -> the entire
+      subtree is skipped (no recursion into the nested class). Descendants
+      with cli=True remain excluded because they are never visited.
+    - Any other value (including absence of the key, None, 0, "") -> included.
+
+  All field-list consumers (``_configure_fields``, ``list_fields``,
+  ``list_fields_with_owners``) MUST obtain their fields through this walker.
+  The exclusion check appears nowhere else.
+  """
+  if path is None:
+    path = []
+  current_owner = owner if owner is not None else clz
+  for f in fields(clz):
+    if _is_cli_excluded(f):
+      continue  # single exclusion point: skip leaf OR skip entire subtree
+    concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+    if is_dataclass(concrete_type):
+      yield ("nested", f, path, current_owner, concrete_type)
+      yield from _iter_cli_fields(concrete_type, path + [f.name], concrete_type)
+    else:
+      yield ("leaf", f, path, current_owner)
+
+
 def _register_arg_name(parser: Parser, arg_name: str, field_name: str) -> None:
   """
   Register an argument name and check for conflicts.
@@ -377,46 +440,52 @@ class Factory:
     target_parser = self.sub_parser if self.sub_parser else self.parser
 
     # Configure fields with nested prefix tracking
-    self._configure_fields(self.config_class, [], self._nested_prefix, target_parser, set())
+    self._configure_fields(self.config_class, [], target_parser, set())
 
   def _configure_fields(
     self,
     clz: type,
     path: list[str],
-    parent_prefix: str | None,
     target_parser: Parser,
     visited: set[type],
   ) -> None:
     """
-    Recursively configure fields for nested dataclasses.
+    Configure fields for nested dataclasses using the single CLI walker.
+
+    Recursion is driven by ``_iter_cli_fields``; this method dispatches on the
+    walker's tagged entries ("nested" / "leaf"). The exclusion check lives
+    solely inside the walker — consumers never call ``_is_cli_excluded``.
 
     Args:
       clz: The dataclass to configure
-      path: Current path in the hierarchy (field names)
-      parent_prefix: The nested prefix from parent config (if any)
+      path: Initial path in the hierarchy (field names from the root caller)
       target_parser: The parser to add arguments to
       visited: Set of config classes already visited in this hierarchy
     """
-    for f in fields(clz):
-      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
+    # Precompute the root prefix parts so we can compute each nested entry's
+    # nested_prefix directly from the walker-provided path (no parent_prefix
+    # stack needed). The root prefix is self._nested_prefix set in
+    # configure_parser (which equals self.prefix or None).
+    root_parts: list[str] = self._nested_prefix.split(".") if self._nested_prefix else []
 
-      if is_dataclass(concrete_type):
+    for kind, f, fpath, owner, *extra in _iter_cli_fields(clz, path):
+      if kind == "nested":
+        concrete_type = extra[0]
+
         # Check if nested config has cmd - that's not allowed
         if has_factory(concrete_type):
           nested_factory = get_factory(concrete_type)
           if nested_factory.cmd:
             raise ValueError(
               f"Cannot nest subcommand config '{concrete_type.__name__}' "
-              f"inside '{clz.__name__}'. Subcommand configs must be at root level."
+              f"inside '{owner.__name__}'. Subcommand configs must be at root level."
             )
 
-        # Build nested prefix for this field
-        # path contains the path from the current config class to this field
-        # parent_prefix is the full prefix from the root to this point
-        if parent_prefix:
-          nested_prefix = f"{parent_prefix}.{f.name}"
-        else:
-          nested_prefix = f.name
+        # Build nested prefix for this field directly from the walker path.
+        # fpath is the accumulated field-name path from the root config class
+        # to the parent of this nested field. Appending f.name gives the full
+        # dotted path; prepending root_parts incorporates the top-level prefix.
+        nested_prefix = ".".join(root_parts + fpath + [f.name])
 
         # Check for duplicate config class in hierarchy
         if concrete_type in visited:
@@ -433,27 +502,26 @@ class Factory:
         # Mark as visited for duplicate detection
         visited.add(concrete_type)
 
-        # Recurse into nested dataclass
-        self._configure_fields(
-          concrete_type, path + [f.name], nested_prefix, target_parser, visited
-        )
-      else:
+      else:  # leaf
         # Leaf field - add argument
         # Check if this field has already been registered
-        if _registry.is_field_registered(target_parser, clz, f.name):
+        if _registry.is_field_registered(target_parser, owner, f.name):
           continue
 
         # Mark this field as registered
-        _registry.register_field(target_parser, clz, f.name)
+        _registry.register_field(target_parser, owner, f.name)
 
         # Build the argument name
-        name = ".".join(path + [f.name])
+        name = ".".join(fpath + [f.name])
         cli_name = name.replace(".", "-").replace("_", "-")
 
         # Apply nested prefix if set
         if self._nested_prefix:
           cli_name = f"{self._nested_prefix}-{cli_name}"
           name = f"{self._nested_prefix}.{name}"
+
+        # Compute the concrete (non-dataclass) type for this leaf
+        concrete_type = unpack_type(f.type)
 
         # Detect list types
         origin = get_origin(concrete_type)
@@ -623,50 +691,46 @@ class Factory:
     self, clz: type | None = None, path: list[str] | None = None
   ) -> list[tuple[Field[Any], list[str]]]:
     """
-    Recursively list all fields in nested dataclasses.
+    List all CLI-visible leaf fields in nested dataclasses.
+
+    Delegates to the single ``_iter_cli_fields`` walker, filtering for "leaf"
+    entries. Fields and subtrees marked ``metadata["cli"] is False`` are
+    excluded by the walker and never appear here.
 
     Args:
       clz: The dataclass to inspect (defaults to self.config_class)
       path: Current path in the hierarchy (used for recursion)
 
     Returns:
-      List of (field, path) tuples for each leaf field.
+      List of (field, path) tuples for each visible leaf field.
     """
     clz = self.config_class if clz is None else clz
     path = [] if path is None else path
-    result = []
-    for f in fields(clz):
-      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
-      if is_dataclass(concrete_type):
-        result.extend(self.list_fields(concrete_type, path=path + [f.name]))
-      else:
-        result.append((f, path))
-    return result
+    return [(f, p) for kind, f, p, _owner, *_extra in _iter_cli_fields(clz, path) if kind == "leaf"]
 
   def list_fields_with_owners(
     self, clz: type | None = None, path: list[str] | None = None
   ) -> list[tuple[Field[Any], list[str], type]]:
     """
-    Recursively list all fields in nested dataclasses with owner class info.
+    List all CLI-visible leaf fields in nested dataclasses with owner class.
+
+    Delegates to the single ``_iter_cli_fields`` walker, filtering for "leaf"
+    entries. Fields and subtrees marked ``metadata["cli"] is False`` are
+    excluded by the walker and never appear here.
 
     Args:
       clz: The dataclass to inspect (defaults to self.config_class)
       path: Current path in the hierarchy (used for recursion)
 
     Returns:
-      List of (field, path, owner_class) tuples for each leaf field.
+      List of (field, path, owner_class) tuples for each visible leaf field.
       owner_class is the dataclass that directly owns the field.
     """
     clz = self.config_class if clz is None else clz
     path = [] if path is None else path
-    result = []
-    for f in fields(clz):
-      concrete_type = unpack_type(f.type)  # type: ignore[arg-type]
-      if is_dataclass(concrete_type):
-        result.extend(self.list_fields_with_owners(concrete_type, path=path + [f.name]))
-      else:
-        result.append((f, path, clz))
-    return result
+    return [
+      (f, p, owner) for kind, f, p, owner, *_extra in _iter_cli_fields(clz, path) if kind == "leaf"
+    ]
 
 
 def _reset_factories() -> None:

@@ -57,6 +57,8 @@ def register_field(
   name: str,
   field_type: type[Any],
   default_factory: Callable[[], Any] | None = None,
+  *,
+  metadata: dict[str, Any] | None = None,
 ) -> None:
   """Add a field to a parent config class at runtime.
 
@@ -68,6 +70,10 @@ def register_field(
       name: Field name to add (e.g., "pkgq")
       field_type: Config class for this field (e.g., PkgqToolConfig)
       default_factory: Optional factory (defaults to field_type)
+      metadata: Optional field metadata (keyword-only). When ``None`` (the
+          default), an empty dict is used, preserving the previous behavior.
+          Pass ``{"cli": False}`` to register a field that is loadable via
+          TOML/env/defaults but excluded from CLI argument generation.
 
   Raises:
       TypeError: If parent is a frozen dataclass
@@ -88,6 +94,11 @@ def register_field(
       # Now ToolsConfig has a pkgq field
       # TOML: [tools.pkgq]
       # CLI: --tools-pkgq-enabled
+
+      # To register a secret field excluded from CLI:
+      register_field(ToolsConfig, "secret", SecretConfig, metadata={"cli": False})
+      # Field is in __dataclass_fields__, loadable via TOML [tools.secret],
+      # but no --tools-secret-* CLI arguments are generated.
   """
   # Check if parent is a frozen dataclass
   if hasattr(parent, "__dataclass_params__"):
@@ -147,7 +158,7 @@ def register_field(
     repr=True,
     hash=None,
     compare=True,
-    metadata={},
+    metadata=metadata if metadata is not None else {},
     kw_only=False,
   )
   # Set the name, type, and _field_type

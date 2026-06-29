@@ -214,11 +214,15 @@ make pre-publish   # Pre-publication checks
 
 ```
 tests/
-├── test_parser.py          # TOML parser selection
-├── test_security.py        # Security validation
-├── test_list_append.py     # List-append CLI behavior
-├── test_cli_aliases.py     # CLI alias support
-└── test_bug_regression.py  # Bug fix regression tests
+├── test_parser.py            # TOML parser selection
+├── test_security.py          # Security validation
+├── test_list_append.py       # List-append CLI behavior
+├── test_cli_aliases.py       # CLI alias support
+├── test_cli_exclusion.py     # CLI field exclusion (metadata["cli"]=False)
+├── test_nested_prefix.py     # Nested config prefix propagation
+├── test_registration.py      # Dynamic field registration
+├── test_bug_regression.py     # Bug fix regression tests
+└── ...                       # Full list in tests/
 ```
 
 ### Running Tests
@@ -355,6 +359,40 @@ config = get_config(Config)
 2. **src/clevis/factory.py** - Factory pattern, CLI generation
 3. **src/clevis/configclass.py** - @configclass decorator
 4. **src/clevis/registration.py** - Dynamic registration
+
+### CLI Field Exclusion (P1-004)
+
+Fields can be excluded from CLI argument generation by setting
+`metadata={"cli": False}` on the field. Excluded fields remain loadable via
+TOML, env interpolation, and dataclass defaults — they are simply not exposed
+as CLI arguments. This is the recommended mechanism for secret fields (API
+keys, tokens) to prevent leakage via `ps`, shell history, and CI logs.
+
+**Design**: A single recursive walker `_iter_cli_fields` in `factory.py` is the
+sole source of truth for CLI field visibility. The exclusion predicate
+`_is_cli_excluded(f)` (strict `f.metadata.get("cli", True) is False`) lives
+inside the walker and is used nowhere else. All field-list consumers
+(`_configure_fields`, `list_fields`, `list_fields_with_owners`) delegate to
+the walker. ConfigError uses `_is_field_path_excluded` (built on the same
+predicate) to set `suggest_cli=False` for excluded fields so error messages
+don't advertise hidden CLI argument names.
+
+**Usage**:
+```python
+@dataclass
+class Config:
+  visible: str = field(default="seen")
+  secret: str = field(default="hidden", metadata={"cli": False})
+
+# Plugin registration with exclusion:
+register_field(ToolsConfig, "secret", SecretConfig, metadata={"cli": False})
+```
+
+**Subtree semantics**: A nested-dataclass field with `cli=False` prunes the
+entire subtree (no recursion); descendants with `cli=True` remain excluded.
+
+**Strict trigger**: Only explicit `False` excludes. `None`, `0`, `""` are all
+INCLUDED (they are not `False` via identity check).
 
 ### Examples
 
