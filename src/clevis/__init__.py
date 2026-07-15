@@ -489,16 +489,32 @@ these with the ``name`` and ``security`` arguments when ``cascade`` is not
 provided.
 
 The most common customization is to **append** a custom provider to the
-default cascade. Use :func:`build_default_cascade` to get the default
-providers, then add your own::
+default cascade. Because :class:`ConfigProvider` is a ``@runtime_checkable``
+``__call__`` protocol, any zero-argument callable returning a dict satisfies
+it — a plain function is the simplest form. Use :func:`build_default_cascade`
+to get the default providers, then add your own::
+
+    from clevis import build_default_cascade, get_config
+
+    def env_provider() -> dict:
+        return {"api_key": os.environ.get("API_KEY", "")}
+
+    cascade = build_default_cascade("myapp") + [env_provider]
+    config = get_config(Config, name="myapp", cascade=cascade)
+
+A class with ``__call__`` is useful when the provider needs constructor
+parameters (state)::
 
     from clevis import build_default_cascade, get_config
 
     class EnvProvider:
-        def __call__(self) -> dict:
-            return {"api_key": os.environ.get("API_KEY", "")}
+        def __init__(self, prefix: str) -> None:
+            self._prefix = prefix
 
-    cascade = build_default_cascade("myapp") + [EnvProvider()]
+        def __call__(self) -> dict:
+            return {f"{self._prefix}_key": os.environ.get(f"{self._prefix}_KEY")}
+
+    cascade = build_default_cascade("myapp") + [EnvProvider("MYAPP")]
     config = get_config(Config, name="myapp", cascade=cascade)
 
 For a **fully custom cascade**, construct provider instances directly::
@@ -524,9 +540,13 @@ def build_default_cascade(
 
   Instantiates :data:`DEFAULT_CASCADE` classes with the given ``name`` and
   ``security``, filtered by the ``user``/``project`` flags. Use this to
-  append custom providers while keeping the secure defaults::
+  append custom providers while keeping the secure defaults (any zero-arg
+  callable returning a dict works — a plain function is the simplest)::
 
-      cascade = build_default_cascade("myapp") + [MyCustomProvider()]
+      def my_provider() -> dict:
+          return {"feature_flag": True}
+
+      cascade = build_default_cascade("myapp") + [my_provider]
       config = get_config(Config, name="myapp", cascade=cascade)
 
   Args:

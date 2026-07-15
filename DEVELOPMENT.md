@@ -164,13 +164,17 @@ services) and are deep-merged between dataclass defaults and CLI arguments.
 ```python
 from clevis import build_default_cascade, get_config
 
-class EnvProvider:
-  def __call__(self) -> dict:
-    return {"api_key": os.environ.get("API_KEY", "")}
+def env_provider() -> dict:
+  return {"api_key": os.environ.get("API_KEY", "")}
 
-cascade = build_default_cascade("myapp") + [EnvProvider()]
+cascade = build_default_cascade("myapp") + [env_provider]
 config = get_config(Config, name="myapp", cascade=cascade)
 ```
+
+`ConfigProvider` is a `@runtime_checkable` `__call__` protocol, so any
+zero-argument callable returning a dict satisfies it — a plain function is
+the simplest form. Use a class with `__call__` when the provider needs
+constructor parameters (state).
 
 **Security**: When a custom cascade is provided, default security checks do
 NOT apply. Each provider owns its security. Use `UserConfigProvider` /
@@ -461,8 +465,9 @@ TOML parser was exposed as public API.
   because they need `name` and `security` at runtime.
 - `build_default_cascade(name, security, user, project)` — helper that
   instantiates `DEFAULT_CASCADE` classes with the given name/security, filtered
-  by user/project flags. Use to append custom providers:
-  `build_default_cascade("myapp") + [MyProvider()]`.
+  by user/project flags. Use to append custom providers (any zero-arg callable
+  returning a dict works — plain function or class with `__call__`):
+  `build_default_cascade("myapp") + [my_provider]`.
 - `deep_merge(base, overlay)` — public recursive dict merge. Nested dicts
   recurse; all other types (lists, scalars) are replaced by the overlay.
   Inputs are not modified. This is distinct from `apply_to_dict` (which

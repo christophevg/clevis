@@ -357,6 +357,22 @@ class TestCascadeParameter:
     config = get_config(Config, name="myapp", cascade=[StaticProvider()], args=[])
     assert config.name == "from-cascade"
 
+  def test_plain_function_works_in_cascade(self):
+    """A plain function (not a class) works as a ConfigProvider in the cascade."""
+    _reset_factories()
+
+    @dataclass
+    class Config:
+      api_key: str = "default"
+
+    def env_provider() -> dict:
+      return {"api_key": "from-function"}
+
+    cascade = build_default_cascade("test") + [env_provider]
+    assert isinstance(env_provider, ConfigProvider)
+    config = get_config(Config, name="test", cascade=cascade, args=[])
+    assert config.api_key == "from-function"
+
   def test_empty_cascade_uses_defaults_only(self):
     """An empty cascade means no middle providers — only defaults + CLI."""
     _reset_factories()

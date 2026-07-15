@@ -936,44 +936,73 @@ The ConfigProvider Protocol
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A :class:`~clevis.ConfigProvider` is a zero-argument callable returning a
-``dict[str, Any]``. Each provider owns its own security/validation and
-raises on failure:
+``dict[str, Any]``. Because it is a ``@runtime_checkable`` ``__call__``
+protocol, **any** zero-argument callable returning a dict satisfies it — a
+plain function, a lambda, or a class with ``__call__``. Each provider owns
+its own security/validation and raises on failure:
 
 .. code-block:: python
 
    from clevis import ConfigProvider
 
+   # Plain function — the simplest form
+   def my_provider() -> dict:
+       return {"api_key": "from-env"}
+
+   assert isinstance(my_provider, ConfigProvider)
+
+   # Class with __call__ — useful when the provider needs state
    class MyProvider:
        def __call__(self) -> dict:
            return {"api_key": "from-env"}
 
-   # MyProvider() satisfies the ConfigProvider protocol
    assert isinstance(MyProvider(), ConfigProvider)
 
 Providers are deep-merged in cascade order: later providers override earlier
 ones, and nested dicts merge key-by-key rather than being replaced wholesale.
 
+.. _append-to-default-pattern:
+
 Append-to-Default Pattern (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The most common customization is to **append** a custom provider to the
-default cascade. Use :func:`~clevis.build_default_cascade` to get the
-secure default providers, then add your own:
+default cascade. Because :class:`~clevis.ConfigProvider` is a
+``@runtime_checkable`` ``__call__`` protocol, a **plain function** is the
+simplest way to add a provider. Use :func:`~clevis.build_default_cascade`
+to get the secure default providers, then add your own:
+
+.. code-block:: python
+
+   from clevis import build_default_cascade, get_config
+
+   def env_provider() -> dict:
+       import os
+       return {"api_key": os.environ.get("API_KEY", "")}
+
+   cascade = build_default_cascade("myapp") + [env_provider]
+   config = get_config(Config, name="myapp", cascade=cascade)
+
+This keeps Clevis's secure user/project TOML loading and adds your custom
+source with the highest precedence in the cascade (just before CLI args).
+
+Use a **class with** ``__call__`` when the provider needs constructor
+parameters (state):
 
 .. code-block:: python
 
    from clevis import build_default_cascade, get_config
 
    class EnvProvider:
+       def __init__(self, prefix: str):
+           self._prefix = prefix
+
        def __call__(self) -> dict:
            import os
-           return {"api_key": os.environ.get("API_KEY", "")}
+           return {f"{self._prefix}_key": os.environ.get(f"{self._prefix}_KEY")}
 
-   cascade = build_default_cascade("myapp") + [EnvProvider()]
+   cascade = build_default_cascade("myapp") + [EnvProvider("MYAPP")]
    config = get_config(Config, name="myapp", cascade=cascade)
-
-This keeps Clevis's secure user/project TOML loading and adds your custom
-source with the highest precedence in the cascade (just before CLI args).
 
 Fully Custom Cascade
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -1095,16 +1124,18 @@ built-in providers.
 
 **4. Using build_default_cascade() + custom provider**
 
+A plain function is the simplest way to add a provider to the default
+cascade (a class works too — see :ref:`Append-to-Default Pattern <append-to-default-pattern>`):
+
 .. code-block:: python
 
    from clevis import build_default_cascade, get_config
 
-   class EnvProvider:
-       def __call__(self) -> dict:
-           import os
-           return {"api_key": os.environ.get("API_KEY", "")}
+   def env_provider() -> dict:
+       import os
+       return {"api_key": os.environ.get("API_KEY", "")}
 
-   cascade = build_default_cascade("myapp") + [EnvProvider()]
+   cascade = build_default_cascade("myapp") + [env_provider]
    config = get_config(Config, name="myapp", cascade=cascade)
 
 See also the :ref:`Security <security>` section for details on
