@@ -51,7 +51,6 @@ from clevis.factory import (
   Factory,
   Parser,
   SubParser,
-  _ensure_configured,
   _is_cli_excluded,
   _reset_factories,
   apply_to_dict,
@@ -404,7 +403,7 @@ def get_cmd(parser: Any = None, args: list[str] | None = None) -> str | None:
   """
   if not parser:
     parser = _factory_module._get_default_parser()
-  parsed_args = vars(_ensure_configured(parser).parse_args(args))
+  parsed_args = vars(_factory_module._parse_with_default(parser, args))
   cmd: str | None = parsed_args.pop("cmd", None)
   return cmd
 

@@ -33,6 +33,9 @@ Lazy Configuration:
 """
 
 import argparse
+import contextlib
+import io
+import sys
 from argparse import Action, Namespace
 from collections.abc import Iterator
 from dataclasses import Field, dataclass, field, fields, is_dataclass
@@ -66,8 +69,14 @@ class Parser(Protocol):
     """Parse arguments and return a Namespace."""
     ...
 
+  def parse_known_args(self, args: list[str] | None = None) -> tuple[Namespace, list[str]]:
+    """Parse known arguments, returning (namespace, unknown_args)."""
+    ...
+
 
 class SubParser(Protocol):
+  required: bool
+
   def add_parser(
     self,
     name: str,
@@ -151,6 +160,9 @@ _registry = ParserRegistry()
 # Factory instances for each configuration class
 # Use forward reference since Factory is defined later
 _factories: dict[type, "Factory"] = {}
+
+# Maps parser → default subcommand name (the cmd value of the factory with default_cmd=True)
+_default_cmds: dict[Parser, str] = {}
 
 
 def _get_default_parser() -> Parser:
@@ -346,6 +358,91 @@ def _ensure_configured(parser: Parser) -> Parser:
   return parser
 
 
+def _parse_with_default(parser: Parser, args: list[str] | None = None) -> Namespace:
+  """
+  Parse arguments, applying the default subcommand if none was given.
+
+  If a default subcommand is configured for this parser and no subcommand is
+  present in the args, the default subcommand name is prepended to the args
+  before parsing. This ensures the default subcommand's arguments are properly
+  parsed.
+
+  --help/-h is handled by argparse natively during the first parse_known_args
+  pass: if no subcommand precedes --help, top-level help is shown (listing all
+  subcommands). If a subcommand precedes --help, that subcommand's help is shown.
+
+  An unknown positional (e.g., 'myapp foobar') is not swallowed: it is left for
+  argparse to reject with an 'invalid choice' error. Options belonging to the
+  default subcommand (e.g., 'myapp --model claude') are correctly routed by
+  prepending the default subcommand name before the full parse.
+
+  If no default is configured, this delegates to parse_args directly (unchanged
+  behavior, required=True on subparsers).
+  """
+  configured_parser = _ensure_configured(parser)
+  default_cmd = _default_cmds.get(parser)
+
+  # No default configured — normal behavior (subparsers required=True)
+  if default_cmd is None:
+    return configured_parser.parse_args(args)
+
+  raw_args = sys.argv[1:] if args is None else list(args)
+
+  # First pass: parse_known_args to detect whether a subcommand is present.
+  # With required=False, this does NOT error on a missing subcommand.
+  # --help is handled natively by argparse here (SystemExit before return).
+  # A positional that doesn't match any subcommand (e.g., an option value like
+  # 'claude' after '--model') triggers a SystemExit(2) "invalid choice" error.
+  # We catch that and check whether the positional was preceded by an option —
+  # if so, it's an option value for the default subcommand, not an invalid
+  # subcommand. Stderr is suppressed during this probe so the spurious
+  # "invalid choice" message never reaches the user when we recover.
+  try:
+    with contextlib.redirect_stderr(io.StringIO()):
+      namespace, unknown = configured_parser.parse_known_args(raw_args)
+  except SystemExit as e:
+    if e.code == 0:
+      raise  # --help was handled, show top-level help
+    if e.code != 2:
+      raise  # not an argparse usage error — propagate unchanged
+    # SystemExit(2): argparse usage error. If the first positional in the args
+    # was preceded by an option flag, it's likely an option value being mistaken
+    # for a subcommand. Prepend the default and re-parse.
+    if _first_positional_preceded_by_option(raw_args):
+      return configured_parser.parse_args([default_cmd] + raw_args)
+    raise  # genuine invalid subcommand, let the error through
+
+  # A valid subcommand was given — do a full parse for proper validation
+  if getattr(namespace, "cmd", None) is not None:
+    return configured_parser.parse_args(raw_args)
+
+  # No subcommand was given. If the first unknown arg is a positional (doesn't
+  # start with '-'), it's likely an invalid subcommand — let argparse produce
+  # the "invalid choice" error via full parse. If the first unknown starts with
+  # '-' (an option belonging to the default subcommand) or there are no
+  # unknowns, prepend the default subcommand name and parse.
+  if unknown and not unknown[0].startswith("-"):
+    return configured_parser.parse_args(raw_args)
+
+  # No subcommand, no invalid positional — only options or empty args.
+  # Prepend the default subcommand name and parse.
+  return configured_parser.parse_args([default_cmd] + raw_args)
+
+
+def _first_positional_preceded_by_option(args: list[str]) -> bool:
+  """
+  Check if the first positional arg in the list is preceded by an option flag.
+
+  Used to distinguish an option value (e.g., 'claude' after '--model') from a
+  standalone invalid subcommand (e.g., 'foobar'). If the first non-option arg
+  is preceded by an arg starting with '-', it's likely an option value.
+  """
+  for i, arg in enumerate(args):
+    if not arg.startswith("-"):
+      return i > 0 and args[i - 1].startswith("-")
+  return False
+
+
 def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None:
   """
   Apply dotted command line arguments to a nested dictionary.
@@ -388,6 +485,7 @@ class Factory:
     help: Optional help text for the subcommand (used with cmd parameter).
     aliases: Optional list of aliases for the subcommand (used with cmd parameter).
     config: Optional TOML extraction key (defaults to cmd if not set).
+    default_cmd: If True, this subcommand runs when no subcommand is given.
     _nested_prefix: Tracks the nesting level in config hierarchy (internal).
   """
 
@@ -398,6 +496,7 @@ class Factory:
   help: str | None = None
   aliases: list[str] | None = None
   config: str | None = None
+  default_cmd: bool = False
   sub_parser: Parser | None = field(init=False, default=None)
   _nested_prefix: str | None = field(init=False, default=None)
 
@@ -434,6 +533,19 @@ class Factory:
       if self.aliases is not None:
         add_parser_kwargs["aliases"] = self.aliases
       self.sub_parser = get_sub_parser(self.parser).add_parser(self.cmd, **add_parser_kwargs)
+
+      # Register default subcommand and detect multiple defaults per parser
+      if self.default_cmd:
+        if self.parser in _default_cmds:
+          existing_default = _default_cmds[self.parser]
+          raise ValueError(
+            f"Multiple default subcommands configured on the same parser: "
+            f"'{existing_default}' and '{self.cmd}'. "
+            f"Only one @configclass can have default_cmd=True per CLI. "
+            f"Remove default_cmd=True from all but one."
+          )
+        _default_cmds[self.parser] = self.cmd
+        get_sub_parser(self.parser).required = False
     self._configured = True
 
     # Get the target parser
@@ -679,7 +791,7 @@ class Factory:
       Dictionary with dotted keys (e.g., {"database.host": "localhost"}).
       If _nested_prefix is set, keys are stripped of the prefix.
     """
-    args_dict = vars(_ensure_configured(self.parser).parse_args(args))
+    args_dict = vars(_parse_with_default(self.parser, args))
     if self._nested_prefix:
       prefix = self._nested_prefix + "."
       return {
@@ -740,12 +852,13 @@ def _reset_factories() -> None:
   For testing only - ensures test isolation by resetting global state.
   Creates a fresh default parser.
   """
-  global _factories, _default_parser, _sub_parsers, _registry
+  global _factories, _default_parser, _sub_parsers, _registry, _default_cmds
   # Clear dictionaries/lists in-place instead of reassigning
   # This ensures all module references see the changes
   _factories.clear()
   _sub_parsers.clear()
   _registry.clear()
+  _default_cmds.clear()
   # Reset default parser by setting to None (will be recreated lazily)
   _default_parser = None
 

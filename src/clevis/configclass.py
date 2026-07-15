@@ -56,6 +56,7 @@ def configclass(
   help: str | None = None,
   aliases: list[str] | None = None,
   config: str | None = None,
+  default_cmd: bool = False,
 ) -> type[T] | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
@@ -88,18 +89,27 @@ def configclass(
     class CliConfig:
       server_url: str = "http://localhost:8000"
 
+  For a default subcommand (runs when no subcommand is given on the CLI)::
+
+    @configclass(cmd="chat", default_cmd=True)
+    class ChatConfig:
+      model: str = "gpt-4"
+
   Args:
     cls: The class to decorate.
     cmd: Optional subcommand name for CLI applications with multiple commands.
     help: Optional help text for the subcommand (used with cmd parameter).
     aliases: Optional list of aliases for the subcommand (used with cmd parameter).
     config: Optional TOML extraction key (requires cmd parameter).
+    default_cmd: If True, this subcommand runs when no subcommand is given on the
+      CLI. Requires cmd. Only one subcommand per parser may set this (raises
+      ValueError at configuration time otherwise).
 
   Returns:
     The decorated class (now a dataclass).
 
   Raises:
-    ValueError: If config parameter is provided without cmd parameter.
+    ValueError: If config or default_cmd is provided without cmd parameter.
   """
 
   def decorator(clz: type[T]) -> type[T]:
@@ -111,6 +121,14 @@ def configclass(
       raise ValueError(
         f"@configclass parameter 'config' requires 'cmd' parameter. "
         f"Use @configclass(cmd='name', config='section') instead. "
+        f"Class: {clz.__name__}"
+      )
+
+    # Validate default_cmd requires cmd
+    if default_cmd and cmd is None:
+      raise ValueError(
+        f"@configclass parameter 'default_cmd' requires 'cmd' parameter. "
+        f"Use @configclass(cmd='name', default_cmd=True) instead. "
         f"Class: {clz.__name__}"
       )
 
@@ -133,6 +151,8 @@ def configclass(
       factory.aliases = aliases
     if config is not None:
       factory.config = config
+    if default_cmd:
+      factory.default_cmd = default_cmd
     return clz
 
   # Decorator return logic:
@@ -150,8 +170,8 @@ def configclass(
   #
   # The condition checks for the "without arguments" case:
   # - cls is not None (decorator received class directly)
-  # - All optional parameters are None (no parentheses or empty @configclass())
-  if cls and not cmd and help is None and aliases is None and config is None:
+  # - All optional parameters are None/false (no parentheses or empty @configclass())
+  if cls and not cmd and help is None and aliases is None and config is None and not default_cmd:
     # Case 1: @configclass without arguments
     # The decorator was used as @configclass, not @configclass(...)
     # Apply the decorator immediately and return the result

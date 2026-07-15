@@ -70,8 +70,14 @@ class Parser(Protocol):
     """Parse arguments and return a Namespace."""
     ...
 
+  def parse_known_args(self, args: list[str] | None = None) -> tuple[Namespace, list[str]]:
+    """Parse known arguments, returning (namespace, unknown_args)."""
+    ...
+
 class SubParser(Protocol):
   """Protocol for sub-parser management."""
+
+  required: bool
 
   def add_parser(
     self,
@@ -100,6 +106,8 @@ class Factory:
   cmd: str | None = None
   help: str | None = None
   aliases: list[str] | None = None
+  config: str | None = None
+  default_cmd: bool = False
   sub_parser: Parser | None = ...
 
   _configured: bool = False
@@ -278,7 +286,9 @@ def configclass(
   cmd: str | None = None,
   help: str | None = None,
   aliases: list[str] | None = None,
-) -> type | Callable[[type[T]], type[T]]:
+  config: str | None = None,
+  default_cmd: bool = False,
+) -> type[T] | Callable[[type[T]], type[T]]:
   """
   Decorator that registers a dataclass with Clevis's factory system.
 
@@ -303,6 +313,8 @@ def configclass(
     cmd: Optional subcommand name for this config
     help: Optional help text for the subcommand
     aliases: Optional list of alternative names for the subcommand
+    config: Optional TOML extraction key (requires cmd)
+    default_cmd: If True, this subcommand runs when no subcommand is given (requires cmd)
 
   Returns:
     The decorated class (now a dataclass).

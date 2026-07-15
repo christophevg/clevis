@@ -15,7 +15,7 @@ Completed via PR #31 (P1-004).
 
 Blocks the Yoker project. Allows marking a subcommand as the default so calling the CLI with no subcommand runs it instead of erroring.
 
-- [ ] **P1-005: Implement configurable default subcommand**
+- [ ] **P1-005: Implement configurable default subcommand** ⏳ 2026-07-15 (PR #34)
   - Add a `default_cmd` boolean flag alongside `cmd` on `@configclass`, e.g. `@configclass(cmd="chat", default_cmd=True)`, marking that subcommand as the default
   - Calling the CLI with no subcommand runs the default subcommand
   - With no default configured, behavior is unchanged (argparse errors on missing subcommand — `required=True` stays when no subcommand is marked as default)
@@ -34,6 +34,7 @@ Blocks the Yoker project. Allows marking a subcommand as the default so calling 
     - Multiple `default_cmd=True` on different subcommands raises a clear configuration error
     - Existing subcommand features (aliases, help text, TOML section extraction) continue to work with the default subcommand
     - All existing tests pass; new tests cover the default-subcommand behavior and edge cases
+  - **Status**: Implementation complete, pending review (PR #34)
   - **GitHub Issue**: #32
   - **Priority**: P1 (blocks Yoker project)
 

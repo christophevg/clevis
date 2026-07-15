@@ -753,4 +753,3 @@ class TestEdgeCases:
       args=["--no-debug", "--debug"],
     )
     assert config3.debug is True
-
