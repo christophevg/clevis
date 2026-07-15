@@ -8,6 +8,7 @@ from argparse import Action, Namespace
 from collections.abc import Callable
 from dataclasses import Field, dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypedDict, TypeVar, runtime_checkable
 
 # Type Variables
@@ -177,7 +178,26 @@ class ConfigProvider(Protocol):
     """Return a configuration dict. Raise on failure."""
     ...
 
-class UserConfigProvider:
+class FileConfigProvider:
+  """Shared base for file-based TOML config providers.
+
+  Encapsulates the TOCTOU-safe FD access pattern and directory/file
+  permission checks. Subclass this to get security checks for free when
+  loading TOML from non-standard paths.
+  """
+
+  _path_template: str
+
+  def __init__(
+    self,
+    name: str,
+    security: SecurityConfig | None = ...,
+  ) -> None: ...
+  def _root_dir(self) -> Path: ...
+  def _resolve_path(self, name: str) -> Path: ...
+  def __call__(self) -> dict[str, Any]: ...
+
+class UserConfigProvider(FileConfigProvider):
   """ConfigProvider that loads user-level TOML (~/.{name}.toml).
 
   Owns its own security checks (file and directory permissions, TOCTOU-safe
@@ -191,7 +211,7 @@ class UserConfigProvider:
   ) -> None: ...
   def __call__(self) -> dict[str, Any]: ...
 
-class ProjectConfigProvider:
+class ProjectConfigProvider(FileConfigProvider):
   """ConfigProvider that loads project-level TOML (./{name}.toml).
 
   Owns its own security checks (file and directory permissions, TOCTOU-safe
@@ -207,6 +227,19 @@ class ProjectConfigProvider:
 
 DEFAULT_CASCADE: tuple[type[ConfigProvider], ...]
 """Default cascade of provider classes (user-TOML, then project-TOML)."""
+
+def build_default_cascade(
+  name: str,
+  security: SecurityConfig | None = ...,
+  user: bool = ...,
+  project: bool = ...,
+) -> list[ConfigProvider]:
+  """Build a list of default ConfigProvider instances.
+
+  Instantiates DEFAULT_CASCADE classes with the given name and security,
+  filtered by user/project flags.
+  """
+  ...
 
 def deep_merge(
   base: dict[str, Any],
@@ -238,6 +271,47 @@ def loads(s: str) -> dict[str, Any]:
 # Descriptive aliases
 load_toml: Callable[[BinaryIO], dict[str, Any]]
 loads_toml: Callable[[str], dict[str, Any]]
+
+# Public Security Helpers (P1-006)
+
+def check_file_permissions(
+  path: Path,
+  action: SecurityAction,
+) -> tuple[bool, int | None]:
+  """Check if file has secure permissions (owner-only readable), TOCTOU-safe.
+
+  Returns (check_passed, file_descriptor). Caller must close fd if not None.
+  """
+  ...
+
+def check_directory_permissions(
+  path: Path,
+  action: SecurityAction,
+) -> bool:
+  """Check if parent directory is world-writable.
+
+  Returns True if check passes or is skipped. Raises SecurityError on REJECT.
+  """
+  ...
+
+def load_toml_from_fd(fd: int) -> dict[str, Any]:
+  """Load TOML from a file descriptor.
+
+  Wraps the fd in a file object for the TOML parser. The file object takes
+  ownership of the fd and closes it.
+  """
+  ...
+
+def load_toml_file(
+  path: Path,
+  security: SecurityConfig | None = ...,
+) -> dict[str, Any]:
+  """Securely load a TOML file with Clevis's default security checks.
+
+  Combines directory check, TOCTOU-safe file check, and TOML parsing.
+  Returns empty dict if file does not exist.
+  """
+  ...
 
 # Functions
 

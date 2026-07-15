@@ -44,12 +44,17 @@ post-cascade transform. Result is converted to a dataclass instance via dacite.
 - `get_config()` - Load configuration from all sources (cascade + CLI)
 - `get_cmd()` - Get active subcommand
 - `ConfigProvider` - Protocol for pluggable config sources
+- `FileConfigProvider` - Subclassable base for file-based TOML providers (public)
 - `UserConfigProvider` / `ProjectConfigProvider` - Default TOML providers (public)
 - `DEFAULT_CASCADE` - Tuple of default provider classes
+- `build_default_cascade()` - Helper to instantiate default providers filtered by flags
 - `deep_merge()` - Recursive dict merge for cascade layer
 - `load()` / `loads()` / `load_toml` / `loads_toml` - Public TOML parsers (raw)
+- `check_file_permissions()` - TOCTOU-safe file permission check (public, returns fd)
+- `check_directory_permissions()` - World-writable directory check (public)
+- `load_toml_from_fd()` - Load TOML from file descriptor (public, fd ownership transferred)
+- `load_toml_file()` - All-in-one secure TOML file loader (public convenience)
 - `_get_toml_parser()` - Select TOML parser (envtoml → tomlev → tomli → tomllib)
-- `_check_file_permissions()` - TOCTOU-safe security validation (used by providers)
 - `_merge_list_args()` - Merge CLI list args with TOML values
 
 **factory.py**: Factory pattern & CLI generation
@@ -149,6 +154,33 @@ class PkgqToolConfig:
 
 register_field(ToolsConfig, "pkgq", PkgqToolConfig)
 ```
+
+### 7. Custom Config Provider
+The middle config layer is a pluggable cascade of `ConfigProvider` instances.
+Custom providers inject config from any source (env vars, databases, remote
+services) and are deep-merged between dataclass defaults and CLI arguments.
+
+**Append-to-default pattern** (recommended):
+```python
+from clevis import build_default_cascade, get_config
+
+class EnvProvider:
+  def __call__(self) -> dict:
+    return {"api_key": os.environ.get("API_KEY", "")}
+
+cascade = build_default_cascade("myapp") + [EnvProvider()]
+config = get_config(Config, name="myapp", cascade=cascade)
+```
+
+**Security**: When a custom cascade is provided, default security checks do
+NOT apply. Each provider owns its security. Use `UserConfigProvider` /
+`ProjectConfigProvider` as secure building blocks, or apply checks manually
+with `check_file_permissions` / `check_directory_permissions` /
+`load_toml_from_fd`. The `load_toml_file()` convenience function combines
+all three checks. `FileConfigProvider` is a subclassable base that applies
+security automatically for file-based providers.
+
+See `docs/usage.rst` → "Custom Config Providers (Cascade)" for the full guide.
 
 ## Important Design Decisions
 
@@ -415,6 +447,10 @@ TOML parser was exposed as public API.
 
 - `ConfigProvider` — `runtime_checkable` Protocol: zero-argument callable
   returning `dict[str, Any]`, owning its own security, raising on failure.
+- `FileConfigProvider` — subclassable base for file-based TOML providers.
+  Encapsulates the TOCTOU-safe FD access pattern and file/directory permission
+  checks. Subclass and override `_root_dir()` to load from custom paths with
+  security for free.
 - `UserConfigProvider` / `ProjectConfigProvider` — default provider classes
   that load `~/.{name}.toml` and `./{name}.toml` respectively. They encapsulate
   the TOCTOU-safe FD access pattern (`os.open` → `os.fstat` → read from same
@@ -423,6 +459,10 @@ TOML parser was exposed as public API.
 - `DEFAULT_CASCADE` — `tuple[type[ConfigProvider], ...]` =
   `(UserConfigProvider, ProjectConfigProvider)`. Classes (not instances)
   because they need `name` and `security` at runtime.
+- `build_default_cascade(name, security, user, project)` — helper that
+  instantiates `DEFAULT_CASCADE` classes with the given name/security, filtered
+  by user/project flags. Use to append custom providers:
+  `build_default_cascade("myapp") + [MyProvider()]`.
 - `deep_merge(base, overlay)` — public recursive dict merge. Nested dicts
   recurse; all other types (lists, scalars) are replaced by the overlay.
   Inputs are not modified. This is distinct from `apply_to_dict` (which
@@ -430,6 +470,15 @@ TOML parser was exposed as public API.
 - `load(fp)` / `loads(s)` / `load_toml` / `loads_toml` — public RAW TOML
   parsers (no security checks) with stdlib-compatible signatures, using the
   same parser selection chain (envtoml > tomlev > tomli > tomllib).
+- `check_file_permissions(path, action)` — TOCTOU-safe file permission check
+  (public). Returns `(bool, fd)`; caller must close fd if not None.
+- `check_directory_permissions(path, action)` — world-writable directory check
+  (public).
+- `load_toml_from_fd(fd)` — load TOML from a file descriptor (public). The
+  file object takes ownership of the fd and closes it.
+- `load_toml_file(path, security)` — all-in-one secure TOML file loader
+  (public convenience). Combines directory check, TOCTUU-safe file check, and
+  TOML parsing. Returns `{}` for missing files.
 
 **`get_config()` cascade architecture**: The middle layer (user TOML +
 project TOML) is now built from `DEFAULT_CASCADE` when `cascade=None`, filtered

@@ -144,6 +144,26 @@ config = get_config(
 )
 ```
 
+### Custom Config Sources
+
+Inject config from any source (env vars, databases, remote services) by
+appending a custom provider to the default cascade:
+
+```python
+from clevis import build_default_cascade, get_config
+
+class EnvProvider:
+    def __call__(self) -> dict:
+        import os
+        return {"api_key": os.environ.get("API_KEY", "")}
+
+cascade = build_default_cascade("myapp") + [EnvProvider()]
+config = get_config(Config, name="myapp", cascade=cascade)
+```
+
+See [docs/usage.rst](docs/usage.rst#custom-config-providers-cascade) for the
+full guide including security helpers for custom providers.
+
 ## Examples
 
 The `examples/` directory contains 10 comprehensive examples:
