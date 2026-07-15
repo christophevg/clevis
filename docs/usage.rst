@@ -923,6 +923,193 @@ Running with ``--port 3000``:
    # config.port = 3000              # CLI overrides all
    # config.debug = True             # Project sets this
 
+Custom Config Providers (Cascade)
+----------------------------------
+
+Clevis's middle configuration layer (between dataclass defaults and CLI
+arguments) is built from a **cascade** of :class:`~clevis.ConfigProvider`
+instances. The default cascade loads user TOML then project TOML. You can
+customize this cascade to inject config from any source — environment
+variables, remote services, databases, etc.
+
+The ConfigProvider Protocol
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A :class:`~clevis.ConfigProvider` is a zero-argument callable returning a
+``dict[str, Any]``. Each provider owns its own security/validation and
+raises on failure:
+
+.. code-block:: python
+
+   from clevis import ConfigProvider
+
+   class MyProvider:
+       def __call__(self) -> dict:
+           return {"api_key": "from-env"}
+
+   # MyProvider() satisfies the ConfigProvider protocol
+   assert isinstance(MyProvider(), ConfigProvider)
+
+Providers are deep-merged in cascade order: later providers override earlier
+ones, and nested dicts merge key-by-key rather than being replaced wholesale.
+
+Append-to-Default Pattern (Recommended)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The most common customization is to **append** a custom provider to the
+default cascade. Use :func:`~clevis.build_default_cascade` to get the
+secure default providers, then add your own:
+
+.. code-block:: python
+
+   from clevis import build_default_cascade, get_config
+
+   class EnvProvider:
+       def __call__(self) -> dict:
+           import os
+           return {"api_key": os.environ.get("API_KEY", "")}
+
+   cascade = build_default_cascade("myapp") + [EnvProvider()]
+   config = get_config(Config, name="myapp", cascade=cascade)
+
+This keeps Clevis's secure user/project TOML loading and adds your custom
+source with the highest precedence in the cascade (just before CLI args).
+
+Fully Custom Cascade
+~~~~~~~~~~~~~~~~~~~~~~
+
+For full control, construct provider instances directly:
+
+.. code-block:: python
+
+   from clevis import (
+       UserConfigProvider,
+       ProjectConfigProvider,
+       get_config,
+   )
+
+   class MyCustomProvider:
+       def __call__(self) -> dict:
+           return {"feature_flag": True}
+
+   cascade = [
+       UserConfigProvider("myapp"),       # ~/.myapp.toml (secure)
+       MyCustomProvider(),                 # custom source
+       ProjectConfigProvider("myapp"),    # ./myapp.toml (secure)
+   ]
+   config = get_config(Config, name="myapp", cascade=cascade)
+
+Precedence Within the Cascade
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Providers are merged in **list order**: the first provider is the lowest
+precedence, the last is the highest (just below CLI arguments). Deep merge
+means nested dicts combine key-by-key:
+
+.. code-block:: python
+
+   # Provider 1 returns: {"db": {"host": "localhost", "port": 5432}}
+   # Provider 2 returns: {"db": {"host": "prod.db"}}
+   # Merged result:       {"db": {"host": "prod.db", "port": 5432}}
+
+List values are **replaced**, not appended, in the cascade. Only CLI
+arguments have list-append semantics (``--field X --field Y``).
+
+Security Ownership Transfer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. warning::
+
+   When a custom ``cascade`` is provided, Clevis's default security checks
+   do **NOT** apply automatically. Each provider owns its own security.
+   Use :class:`~clevis.UserConfigProvider` /
+   :class:`~clevis.ProjectConfigProvider` as secure building blocks, or
+   apply the same checks manually with the exported security helpers (see
+   :ref:`security-for-custom-providers` below).
+
+.. _security-for-custom-providers:
+
+Security for Custom Providers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Clevis exports security helper functions and a subclassable base class so
+custom provider authors can apply the same TOCTOU-safe checks used by the
+built-in providers.
+
+**1. Using exported security functions directly (low-level composition)**
+
+.. code-block:: python
+
+   from clevis import (
+       check_file_permissions,
+       check_directory_permissions,
+       load_toml_from_fd,
+       SecurityAction,
+   )
+   from pathlib import Path
+
+   class CustomFileProvider:
+       def __init__(self, path: Path):
+           self._path = path
+
+       def __call__(self) -> dict:
+           check_directory_permissions(self._path, SecurityAction.REJECT)
+           _, fd = check_file_permissions(self._path, SecurityAction.REJECT)
+           if fd is None:
+               return {}
+           return load_toml_from_fd(fd)
+
+**2. Using FileConfigProvider as a subclassable base**
+
+.. code-block:: python
+
+   from clevis import FileConfigProvider
+   from pathlib import Path
+
+   class CustomPathProvider(FileConfigProvider):
+       _path_template = "{name}.toml"
+
+       def __init__(self, base_dir: Path, name: str, **kwargs):
+           self._base_dir = base_dir
+           super().__init__(name, **kwargs)
+
+       def _root_dir(self) -> Path:
+           return self._base_dir
+
+   provider = CustomPathProvider(Path("/etc/myapp"), "config")
+   # Security checks (file + directory) are applied automatically.
+
+**3. Using load_toml_file() convenience**
+
+.. code-block:: python
+
+   from clevis import load_toml_file
+   from pathlib import Path
+
+   class SimpleFileProvider:
+       def __init__(self, path: Path):
+           self._path = path
+
+       def __call__(self) -> dict:
+           return load_toml_file(self._path)  # TOCTOU-safe, REJECT by default
+
+**4. Using build_default_cascade() + custom provider**
+
+.. code-block:: python
+
+   from clevis import build_default_cascade, get_config
+
+   class EnvProvider:
+       def __call__(self) -> dict:
+           import os
+           return {"api_key": os.environ.get("API_KEY", "")}
+
+   cascade = build_default_cascade("myapp") + [EnvProvider()]
+   config = get_config(Config, name="myapp", cascade=cascade)
+
+See also the :ref:`Security <security>` section for details on
+``SecurityAction``, ``SecurityConfig``, and the TOCTOU-safe implementation.
+
 Error Handling
 --------------
 
@@ -1060,6 +1247,8 @@ Create test configuration files:
        monkeypatch.chdir(temp_config_file)
        config = get_config(Config, name="test", user=False)
        assert config.name == "TestConfig"
+
+.. _security:
 
 Security
 --------

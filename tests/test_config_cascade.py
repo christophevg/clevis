@@ -10,15 +10,18 @@ import pytest
 from clevis import (
   DEFAULT_CASCADE,
   ConfigProvider,
+  FileConfigProvider,
   ProjectConfigProvider,
   SecurityAction,
   SecurityError,
   UserConfigProvider,
   _reset_factories,
+  build_default_cascade,
   deep_merge,
   get_config,
   load,
   load_toml,
+  load_toml_file,
   loads,
   loads_toml,
 )
@@ -956,15 +959,262 @@ class TestExports:
 
     expected = [
       "ConfigProvider",
+      "FileConfigProvider",
       "UserConfigProvider",
       "ProjectConfigProvider",
       "DEFAULT_CASCADE",
+      "build_default_cascade",
       "deep_merge",
       "load",
       "loads",
       "load_toml",
       "loads_toml",
+      "check_file_permissions",
+      "check_directory_permissions",
+      "load_toml_from_fd",
+      "load_toml_file",
     ]
     for name in expected:
       assert name in clevis.__all__, f"{name} missing from __all__"
       assert hasattr(clevis, name), f"{name} not importable from clevis"
+
+  def test_security_helpers_callable(self):
+    """check_file_permissions, check_directory_permissions, load_toml_from_fd are callable."""
+    import clevis
+
+    assert callable(clevis.check_file_permissions)
+    assert callable(clevis.check_directory_permissions)
+    assert callable(clevis.load_toml_from_fd)
+    assert callable(clevis.load_toml_file)
+    assert callable(clevis.build_default_cascade)
+
+
+# ---------------------------------------------------------------------------
+# build_default_cascade()
+# ---------------------------------------------------------------------------
+
+
+class TestBuildDefaultCascade:
+  """Tests for the build_default_cascade() helper."""
+
+  def test_returns_user_then_project(self, monkeypatch, tmp_path):
+    """build_default_cascade returns User then Project provider instances."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cascade = build_default_cascade("myapp")
+    assert len(cascade) == 2
+    assert isinstance(cascade[0], UserConfigProvider)
+    assert isinstance(cascade[1], ProjectConfigProvider)
+
+  def test_user_false_excludes_user_provider(self, monkeypatch, tmp_path):
+    """user=False excludes UserConfigProvider from the built cascade."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cascade = build_default_cascade("myapp", user=False)
+    assert len(cascade) == 1
+    assert isinstance(cascade[0], ProjectConfigProvider)
+
+  def test_project_false_excludes_project_provider(self, monkeypatch, tmp_path):
+    """project=False excludes ProjectConfigProvider from the built cascade."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cascade = build_default_cascade("myapp", project=False)
+    assert len(cascade) == 1
+    assert isinstance(cascade[0], UserConfigProvider)
+
+  def test_both_false_returns_empty(self, monkeypatch, tmp_path):
+    """user=False, project=False returns an empty cascade."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cascade = build_default_cascade("myapp", user=False, project=False)
+    assert cascade == []
+
+  def test_append_custom_provider_to_defaults(self, monkeypatch, tmp_path):
+    """Appending a custom provider to build_default_cascade works with get_config."""
+    _reset_factories()
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    @dataclass
+    class Cfg:
+      name: str = "default"
+      extra: str = "none"
+
+    class ExtraProvider:
+      def __call__(self) -> dict:
+        return {"extra": "from-custom"}
+
+    cascade = build_default_cascade(
+      "myapp",
+      security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK,
+      },
+    ) + [ExtraProvider()]
+    config = get_config(Cfg, name="myapp", cascade=cascade, args=[])
+    assert config.extra == "from-custom"
+
+  def test_security_applied_to_built_providers(self, monkeypatch, tmp_path):
+    """security= passed to build_default_cascade applies to the providers."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    config_file = tmp_path / ".myapp.toml"
+    config_file.write_text('name = "test"\n')
+    config_file.chmod(0o644)  # Insecure
+
+    cascade = build_default_cascade("myapp")  # Default: REJECT
+    with pytest.raises(SecurityError):
+      cascade[0]()
+
+  def test_instances_satisfy_protocol(self, monkeypatch, tmp_path):
+    """Built provider instances satisfy the ConfigProvider protocol."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cascade = build_default_cascade("myapp")
+    for provider in cascade:
+      assert isinstance(provider, ConfigProvider)
+
+
+# ---------------------------------------------------------------------------
+# load_toml_file()
+# ---------------------------------------------------------------------------
+
+
+class TestLoadTomlFile:
+  """Tests for the load_toml_file() convenience function."""
+
+  def test_loads_existing_file(self, tmp_path):
+    """load_toml_file loads an existing TOML file securely."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('name = "test"\nport = 5432\n')
+    config_file.chmod(0o600)
+
+    result = load_toml_file(
+      config_file,
+      security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK,
+      },
+    )
+    assert result == {"name": "test", "port": 5432}
+
+  def test_returns_empty_dict_for_missing_file(self, tmp_path):
+    """load_toml_file returns {} when the file does not exist."""
+    result = load_toml_file(tmp_path / "nonexistent.toml")
+    assert result == {}
+
+  def test_applies_security_checks_by_default(self, tmp_path):
+    """load_toml_file applies default REJECT security for insecure files."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('name = "test"\n')
+    config_file.chmod(0o644)  # Insecure
+
+    with pytest.raises(SecurityError):
+      load_toml_file(config_file)
+
+  def test_dont_check_bypasses_security(self, tmp_path):
+    """load_toml_file with DONT_CHECK loads insecure files."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('name = "test"\n')
+    config_file.chmod(0o644)
+
+    result = load_toml_file(
+      config_file,
+      security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK,
+      },
+    )
+    assert result == {"name": "test"}
+
+  def test_loads_nested_tables(self, tmp_path):
+    """load_toml_file parses nested TOML tables."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text('[database]\nhost = "localhost"\nport = 5432\n')
+    config_file.chmod(0o600)
+
+    result = load_toml_file(
+      config_file,
+      security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK,
+      },
+    )
+    assert result == {"database": {"host": "localhost", "port": 5432}}
+
+
+# ---------------------------------------------------------------------------
+# FileConfigProvider subclassing
+# ---------------------------------------------------------------------------
+
+
+class TestFileConfigProviderSubclass:
+  """Tests for subclassing FileConfigProvider."""
+
+  def test_subclass_loads_from_custom_path(self, tmp_path, monkeypatch):
+    """A FileConfigProvider subclass loads TOML from a custom root dir."""
+    config_file = tmp_path / "custom.toml"
+    config_file.write_text('name = "custom"\n')
+    config_file.chmod(0o600)
+
+    class CustomProvider(FileConfigProvider):
+      _path_template = "{name}.toml"
+
+      def _root_dir(self) -> Path:
+        return tmp_path
+
+    provider = CustomProvider(
+      "custom",
+      security={
+        "file_permissions": SecurityAction.DONT_CHECK,
+        "directory_permissions": SecurityAction.DONT_CHECK,
+      },
+    )
+    result = provider()
+    assert result == {"name": "custom"}
+
+  def test_subclass_security_checks_work(self, tmp_path):
+    """A FileConfigProvider subclass applies security checks by default."""
+    config_file = tmp_path / "custom.toml"
+    config_file.write_text('name = "custom"\n')
+    config_file.chmod(0o644)  # Insecure
+
+    class CustomProvider(FileConfigProvider):
+      _path_template = "{name}.toml"
+
+      def _root_dir(self) -> Path:
+        return tmp_path
+
+    provider = CustomProvider("custom")
+    with pytest.raises(SecurityError):
+      provider()
+
+  def test_subclass_returns_empty_for_missing_file(self, tmp_path):
+    """A FileConfigProvider subclass returns {} for missing files."""
+
+    class CustomProvider(FileConfigProvider):
+      _path_template = "{name}.toml"
+
+      def _root_dir(self) -> Path:
+        return tmp_path
+
+    provider = CustomProvider("nonexistent")
+    assert provider() == {}
+
+  def test_subclass_satisfies_protocol(self, tmp_path):
+    """A FileConfigProvider subclass satisfies ConfigProvider protocol."""
+
+    class CustomProvider(FileConfigProvider):
+      _path_template = "{name}.toml"
+
+      def _root_dir(self) -> Path:
+        return tmp_path
+
+    provider = CustomProvider("x")
+    assert isinstance(provider, ConfigProvider)

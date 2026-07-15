@@ -50,6 +50,61 @@ These functions are used internally but may be useful for advanced use cases.
 
 .. autofunction:: clevis.get_sub_parser
 
+Config Override Cascade (P1-006)
+--------------------------------
+
+The config override cascade enables pluggable config sources (providers)
+that are deep-merged between dataclass defaults and CLI arguments.
+
+.. autoclass:: clevis.ConfigProvider
+   :members:
+   :member-order: bysource
+
+.. autoclass:: clevis.FileConfigProvider
+   :members:
+   :member-order: bysource
+
+.. autoclass:: clevis.UserConfigProvider
+   :members:
+   :member-order: bysource
+
+.. autoclass:: clevis.ProjectConfigProvider
+   :members:
+   :member-order: bysource
+
+.. autodata:: clevis.DEFAULT_CASCADE
+
+.. autofunction:: clevis.build_default_cascade
+
+.. autofunction:: clevis.deep_merge
+
+Security Helpers (P1-006)
+-------------------------
+
+Exported security functions for custom ``ConfigProvider`` authors. These
+implement the TOCTOU-safe file access pattern used by the built-in providers.
+
+.. autofunction:: clevis.check_file_permissions
+
+.. autofunction:: clevis.check_directory_permissions
+
+.. autofunction:: clevis.load_toml_from_fd
+
+.. autofunction:: clevis.load_toml_file
+
+Public TOML API (P1-006)
+------------------------
+
+Raw TOML parsers (no security checks) with stdlib-compatible signatures.
+
+.. autofunction:: clevis.load
+
+.. autofunction:: clevis.loads
+
+.. autodata:: clevis.load_toml
+
+.. autodata:: clevis.loads_toml
+
 Testing Helpers
 ---------------
 

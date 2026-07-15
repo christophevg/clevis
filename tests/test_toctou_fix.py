@@ -10,8 +10,8 @@ import pytest
 from clevis import (
   SecurityAction,
   SecurityError,
-  _check_file_permissions,
-  _load_toml_from_fd,
+  check_file_permissions,
+  load_toml_from_fd,
   get_config,
   _reset_factories,
 )
@@ -21,7 +21,7 @@ class TestToctouFix:
   """Tests for TOCTOU-safe file permission checking."""
 
   def test_check_file_permissions_returns_fd(self):
-    """_check_file_permissions should return a file descriptor for existing files."""
+    """check_file_permissions should return a file descriptor for existing files."""
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
       f.write(b'test = "value"')
       fname = f.name
@@ -31,7 +31,7 @@ class TestToctouFix:
       # Set secure permissions
       os.chmod(fname, 0o600)
 
-      passed, fd = _check_file_permissions(path, SecurityAction.DONT_CHECK)
+      passed, fd = check_file_permissions(path, SecurityAction.DONT_CHECK)
 
       assert passed is True
       assert fd is not None
@@ -43,10 +43,10 @@ class TestToctouFix:
       os.unlink(fname)
 
   def test_check_file_permissions_no_file(self):
-    """_check_file_permissions should return None fd for non-existent files."""
+    """check_file_permissions should return None fd for non-existent files."""
     path = Path("/nonexistent/file.toml")
 
-    passed, fd = _check_file_permissions(path, SecurityAction.REJECT)
+    passed, fd = check_file_permissions(path, SecurityAction.REJECT)
 
     assert passed is True
     assert fd is None
@@ -63,7 +63,7 @@ class TestToctouFix:
       os.chmod(fname, 0o644)
 
       with pytest.raises(SecurityError):
-        _check_file_permissions(path, SecurityAction.REJECT)
+        check_file_permissions(path, SecurityAction.REJECT)
 
       # fd should be closed after SecurityError
     finally:
@@ -80,7 +80,7 @@ class TestToctouFix:
       # Set insecure permissions
       os.chmod(fname, 0o644)
 
-      passed, fd = _check_file_permissions(path, SecurityAction.LOG)
+      passed, fd = check_file_permissions(path, SecurityAction.LOG)
 
       assert passed is True
       assert fd is not None
@@ -91,7 +91,7 @@ class TestToctouFix:
       os.unlink(fname)
 
   def test_load_toml_from_fd(self):
-    """_load_toml_from_fd should read TOML from file descriptor."""
+    """load_toml_from_fd should read TOML from file descriptor."""
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
       f.write(b'test = "value"\nnumber = 42')
       fname = f.name
@@ -101,11 +101,11 @@ class TestToctouFix:
       fd = os.open(fname, os.O_RDONLY)
 
       # Load TOML from fd
-      result = _load_toml_from_fd(fd)
+      result = load_toml_from_fd(fd)
 
       assert result == {"test": "value", "number": 42}
 
-      # fd should be closed by _load_toml_from_fd
+      # fd should be closed by load_toml_from_fd
     finally:
       os.unlink(fname)
 
@@ -151,7 +151,7 @@ class TestToctouFix:
 
       # This should raise SecurityError and close the fd
       with pytest.raises(SecurityError):
-        _check_file_permissions(path, SecurityAction.REJECT)
+        check_file_permissions(path, SecurityAction.REJECT)
 
       # If fd wasn't closed properly, this test would fail with resource leak
       # (we can't directly check if fd is closed in Python, but the test passes
