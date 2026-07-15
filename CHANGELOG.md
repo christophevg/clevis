@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Configurable Config Override Cascade**: `get_config()` now accepts an
+  optional `cascade` parameter — a list of `ConfigProvider` instances that
+  replace the default middle layers (user-TOML and project-TOML).
+  - `ConfigProvider` Protocol: zero-argument callable returning a dict, owning
+    its own security and raising on failure
+  - `UserConfigProvider` and `ProjectConfigProvider`: default provider classes
+    encapsulating the existing TOCTOU-safe file permission checks (public API,
+    reusable building blocks for custom cascades)
+  - `DEFAULT_CASCADE`: tuple of default provider classes
+    `(UserConfigProvider, ProjectConfigProvider)`
+  - `deep_merge`: public recursive dict merge function for consistent merging
+    across custom providers
+  - Custom providers can contribute `[cmd]` sections consolidated by deep merge
+  - When `cascade` is provided, `user`/`project` flags and `security` are
+    ignored (each provider owns its security); an info log is emitted when
+    `security` is also supplied
+
+- **Public TOML API**: `load(fp)` and `loads(s)` functions exposed with
+  stdlib-compatible signatures (drop-in for `tomllib.load`/`tomllib.loads`).
+  - `load_toml`/`loads_toml` aliases also available for discoverability
+  - These are RAW parsers with NO security checks, matching stdlib conventions.
+    Use `get_config()` or `UserConfigProvider`/`ProjectConfigProvider` for
+    secure file loading.
+
+### Changed
+
+- **BREAKING: Shallow → Deep Merge**: The merge of user-level and project-level
+  TOML files changed from shallow (`dict.update`) to deep (recursive dict merge).
+  Nested tables are now merged key-by-key instead of being replaced wholesale.
+  A project TOML `[database]` section now adds to (not replaces) the user TOML
+  `[database]` section. Users who relied on wholesale replacement should provide
+  all keys in the overriding TOML section. List fields are still replaced (not
+  appended) in the cascade layer; only CLI args append to lists.
+  - **Security note**: Deep merge allows a config source to override individual
+    nested fields without replacing the entire section. A compromised config
+    file can surgically modify security-relevant settings (e.g., `ssl_mode`,
+    `verify_certificates`) while preserving other fields from earlier sources.
+    Applications with security-sensitive nested config should review their
+    config cascade trust model.
+
 ## 0.6.0 (2026-06-29)
 
 ### Added

@@ -32,6 +32,7 @@ Example:
   config = get_config(Config, name="myapp")
 """
 
+import io
 import logging
 import os
 import re
@@ -40,7 +41,7 @@ from collections.abc import Callable
 from dataclasses import fields, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypedDict, TypeVar, get_origin
+from typing import Any, Protocol, TypedDict, TypeVar, get_origin, runtime_checkable
 
 from dacite import Config, from_dict
 from dacite.exceptions import DaciteError, MissingValueError, WrongTypeError
@@ -309,6 +310,233 @@ def _load_toml_from_fd(fd: int) -> dict[str, Any]:
   return _load_toml(file_obj)
 
 
+# Public TOML API
+# ---------------
+# Raw parsers (no security checks), matching stdlib tomllib signatures.
+# Use the same parser selection chain as get_config (envtoml > tomlev > tomli > tomllib).
+
+
+def load(fp: Any) -> dict[str, Any]:
+  """Load TOML from a binary file object.
+
+  Drop-in compatible with ``tomllib.load``. Uses Clevis's automatic parser
+  selection (envtoml > tomlev > tomli > tomllib).
+
+  This is a RAW parser: no security checks (file permissions, directory
+  permissions, TOCTOU-safe access). To load TOML config files with security
+  validation, use :func:`get_config` or construct a
+  :class:`UserConfigProvider` / :class:`ProjectConfigProvider`.
+
+  Args:
+      fp: A binary file object (opened with mode ``'rb'``).
+
+  Returns:
+      Parsed TOML as a dictionary.
+
+  Raises:
+      ImportError: If no TOML parser is available.
+      Exception: Parser-specific errors for invalid TOML.
+  """
+  return _load_toml(fp)
+
+
+def loads(s: str) -> dict[str, Any]:
+  """Load TOML from a string.
+
+  Drop-in compatible with ``tomllib.loads``. Uses Clevis's automatic parser
+  selection.
+
+  This is a RAW parser with no security checks (there is no file to check
+  for a string input).
+
+  Args:
+      s: A string containing TOML data.
+
+  Returns:
+      Parsed TOML as a dictionary.
+
+  Raises:
+      ImportError: If no TOML parser is available.
+      Exception: Parser-specific errors for invalid TOML.
+  """
+  return _load_toml(io.BytesIO(s.encode("utf-8")))
+
+
+# Descriptive aliases for discoverability (same functions, explicit "toml" name).
+load_toml = load
+loads_toml = loads
+
+
+# Config Provider Protocol
+# ------------------------
+# Pluggable config sources for the cascade middle layer. Each provider is a
+# zero-argument callable that owns its own security and returns a dict.
+
+
+@runtime_checkable
+class ConfigProvider(Protocol):
+  """Callable protocol that provides a configuration dict.
+
+  A ConfigProvider is a zero-argument callable returning a dict of
+  configuration data. Providers own their own security/validation (file
+  permission checks, path resolution, TOCTOU-safe access) and raise on
+  failure. Callers do not pass ``name`` or ``security`` arguments to the
+  provider; the provider captures everything it needs at construction time.
+
+  Security Contract:
+      Each provider is responsible for its own security validation. Clevis
+      does not authenticate or validate provider security postures. Custom
+      providers bypass clevis's default security checks — use
+      :class:`UserConfigProvider` / :class:`ProjectConfigProvider` as secure
+      building blocks for file-based providers.
+
+  Returns:
+      A dict of configuration values. Nested dicts are deep-merged across
+      providers in cascade order.
+
+  Raises:
+      Any exception on failure. :class:`SecurityError` should be raised for
+      security check failures to stay consistent with the default providers.
+  """
+
+  def __call__(self) -> dict[str, Any]:
+    """Return a configuration dict. Raise on failure."""
+    ...
+
+
+def _default_security(security: SecurityConfig | None) -> SecurityConfig:
+  """Resolve a security config, defaulting to maximally strict (REJECT)."""
+  if security is None:
+    return {
+      "file_permissions": SecurityAction.REJECT,
+      "directory_permissions": SecurityAction.REJECT,
+    }
+  return security
+
+
+class _FileConfigProvider:
+  """Shared base for file-based TOML config providers.
+
+  Encapsulates the TOCTOU-safe FD access pattern: open FD → fstat → read from
+  the same FD. Also runs directory permission checks before opening the file.
+
+  Subclasses customize resolution by setting ``_path_template`` (a
+  ``{name}``-style format string) and overriding ``_root_dir`` to return the
+  directory the formatted filename is joined against.
+  """
+
+  _path_template: str
+
+  def __init__(self, name: str, security: SecurityConfig | None = None) -> None:
+    self._name = name
+    self._security = _default_security(security)
+    self._path = self._resolve_path(name)
+
+  def _root_dir(self) -> Path:  # pragma: no cover - overridden
+    raise NotImplementedError
+
+  def _resolve_path(self, name: str) -> Path:
+    return self._root_dir() / self._path_template.format(name=name)
+
+  def __call__(self) -> dict[str, Any]:
+    file_action = self._security.get("file_permissions", SecurityAction.REJECT)
+    dir_action = self._security.get("directory_permissions", SecurityAction.REJECT)
+
+    _check_directory_permissions(self._path, dir_action)
+    _, fd = _check_file_permissions(self._path, file_action)
+    if fd is None:
+      # File doesn't exist — not an error, contribute nothing.
+      return {}
+    # _load_toml_from_fd wraps fd in a file object that takes ownership and closes it.
+    return _load_toml_from_fd(fd)
+
+
+class UserConfigProvider(_FileConfigProvider):
+  """ConfigProvider that loads user-level TOML (``~/.{name}.toml``).
+
+  Owns its own security checks (file and directory permissions, TOCTOU-safe
+  FD access). If the file does not exist, returns an empty dict. This is a
+  public, reusable building block for custom cascades.
+  """
+
+  _path_template = USER_CONFIG_TEMPLATE
+
+  def _root_dir(self) -> Path:
+    return Path.home()
+
+
+class ProjectConfigProvider(_FileConfigProvider):
+  """ConfigProvider that loads project-level TOML (``./{name}.toml``).
+
+  Owns its own security checks (file and directory permissions, TOCTOU-safe
+  FD access). If the file does not exist, returns an empty dict. This is a
+  public, reusable building block for custom cascades.
+  """
+
+  _path_template = PROJECT_CONFIG_TEMPLATE
+
+  def _root_dir(self) -> Path:
+    return Path.cwd()
+
+
+DEFAULT_CASCADE: tuple[type[ConfigProvider], ...] = (UserConfigProvider, ProjectConfigProvider)
+"""Default cascade of provider classes (user-TOML, then project-TOML).
+
+Each entry is a class accepting ``(name, security)`` at construction and
+producing a :class:`ConfigProvider` instance. ``get_config`` instantiates
+these with the ``name`` and ``security`` arguments when ``cascade`` is not
+provided.
+
+To build a custom cascade, construct provider instances directly::
+
+    from clevis import UserConfigProvider, ProjectConfigProvider
+
+    cascade = [
+        UserConfigProvider("myapp", security),
+        MyCustomProvider(),
+        ProjectConfigProvider("myapp", security),
+    ]
+    config = get_config(Config, name="myapp", cascade=cascade)
+"""
+
+
+def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+  """Recursively merge ``overlay`` onto ``base``, returning a new dict.
+
+  - When both ``base[key]`` and ``overlay[key]`` are dicts: recurse.
+  - Otherwise: ``overlay[key]`` replaces ``base[key]`` (including lists and
+    scalars; lists are replaced, not appended).
+  - Input dicts are not modified.
+
+  This is the merge strategy used by the config cascade middle layer.
+  Override providers replace entire lists; only nested dicts are merged
+  recursively. CLI args (a fixed last bookend) still append to list fields
+  via ``_merge_list_args``.
+
+  Args:
+      base: The base dict (lower precedence).
+      overlay: The overlay dict (higher precedence).
+
+  Returns:
+      A new dict with the merged result.
+  """
+  result: dict[str, Any] = {}
+  for key, value in base.items():
+    if isinstance(value, dict):
+      # Recursively copy so nested base dicts that the overlay doesn't touch
+      # are still independent from the input (callers can mutate result
+      # without affecting base).
+      result[key] = deep_merge(value, {})
+    else:
+      result[key] = value
+  for key, value in overlay.items():
+    if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+      result[key] = deep_merge(result[key], value)
+    else:
+      result[key] = value
+  return result
+
+
 class ConfigError(Exception):
   """Raised when configuration is missing or invalid."""
 
@@ -538,15 +766,31 @@ def get_config(
   cli: bool = True,
   args: list[str] | None = None,  # used for testing, simulating sys.argv
   security: SecurityConfig | None = None,
+  cascade: list[ConfigProvider] | None = None,
 ) -> T:
   """
   Load configuration from TOML files and CLI arguments.
 
   Merges configuration from (in order of precedence):
   1. CLI arguments (highest priority) - only when cli=True or args is provided
-  2. Project-level TOML: ./{name}.toml
-  3. User-level TOML: ~/.{name}.toml
-  4. Dataclass defaults (lowest priority)
+  2. Middle cascade (default: project TOML, then user TOML) - deep-merged
+  3. Dataclass defaults (lowest priority, filled by dacite)
+
+  The middle cascade is a list of :class:`ConfigProvider` instances. When
+  ``cascade`` is ``None`` (the default), the default cascade is built from
+  :data:`DEFAULT_CASCADE` and filtered by the ``user``/``project`` flags.
+  When ``cascade`` is a list, those providers replace the default middle
+  layers and the ``user``/``project`` flags are ignored.
+
+  The middle cascade uses deep (recursive) merge: nested tables are merged
+  key-by-key rather than replaced wholesale. This is a breaking change from
+  the previous shallow ``dict.update`` behavior — see the changelog.
+
+  WARNING: When a custom ``cascade`` is provided, clevis's default security
+  checks (file permissions, directory permissions, TOCTOU-safe access) do
+  NOT apply. Each provider owns its own security. Use
+  :class:`UserConfigProvider` / :class:`ProjectConfigProvider` as secure
+  building blocks for file-based providers.
 
   TOML Parser Selection:
       Automatically selects parser based on installed extras:
@@ -558,12 +802,18 @@ def get_config(
   Args:
       clz: The dataclass type to populate
       name: Configuration file name (without .toml extension)
-      user: Whether to load user-level config(~/.{name}.toml)
-      project: Whether to load project-level config (./{name}.toml)
+      user: Whether to load user-level config(~/.{name}.toml). Ignored when
+          ``cascade`` is provided.
+      project: Whether to load project-level config (./{name}.toml). Ignored
+          when ``cascade`` is provided.
       cli: Whether to parse CLI arguments from sys.argv (default: True)
       args: Optional list of CLI arguments (overrides sys.argv when provided)
-      security: Security check configuration. If None, defaults to maximally
-          strict (reject on all security issues).
+      security: Security check configuration for the default providers. If
+          None, defaults to maximally strict (reject on all security issues).
+          Ignored when ``cascade`` is provided (providers own their security).
+      cascade: Optional list of :class:`ConfigProvider` instances replacing
+          the default middle layers. When provided, ``user``/``project`` and
+          ``security`` are ignored.
 
   Returns:
       An instance of the dataclass with merged configuration
@@ -573,43 +823,27 @@ def get_config(
       SecurityError: If security checks fail (when action="reject")
       ImportError: If no TOML parser is available
   """
-  # Default security: reject all
-  if security is None:
-    security = {
-      "file_permissions": SecurityAction.REJECT,
-      "directory_permissions": SecurityAction.REJECT,
-    }
+  # Build the active middle cascade.
+  if cascade is not None:
+    if security is not None:
+      logger.warning(
+        "security= parameter is ignored when cascade= is provided. "
+        "Each provider in the cascade owns its own security configuration."
+      )
+    active_cascade = list(cascade)
+  else:
+    active_cascade = []
+    for provider_cls in DEFAULT_CASCADE:
+      if provider_cls is UserConfigProvider and not user:
+        continue
+      if provider_cls is ProjectConfigProvider and not project:
+        continue
+      active_cascade.append(provider_cls(name, security))
 
+  # Deep-merge middle cascade in order (later providers override earlier).
   cfg: dict[str, Any] = {}
-
-  # Get config file paths
-  user_config = Path.home() / USER_CONFIG_TEMPLATE.format(name=name)
-  project_config = Path.cwd() / PROJECT_CONFIG_TEMPLATE.format(name=name)
-
-  # Validate security and load config files
-  # Note: TOCTOU-safe file permission checks
-  file_action = security.get("file_permissions", SecurityAction.REJECT)
-  dir_action = security.get("directory_permissions", SecurityAction.REJECT)
-
-  # Check directory permissions (not TOCTOU-critical)
-  _check_directory_permissions(user_config, dir_action)
-  _check_directory_permissions(project_config, dir_action)
-
-  # Load user-level config (TOCTOU-safe)
-  # Note: _load_toml_from_fd wraps fd in a file object that takes ownership
-  # and closes it when done. No explicit fd close needed here.
-  if user:
-    _, user_fd = _check_file_permissions(user_config, file_action)
-    if user_fd is not None:
-      cfg.update(_load_toml_from_fd(user_fd))
-
-  # Load project-level config (TOCTOU-safe)
-  # Note: _load_toml_from_fd wraps fd in a file object that takes ownership
-  # and closes it when done. No explicit fd close needed here.
-  if project:
-    _, project_fd = _check_file_permissions(project_config, file_action)
-    if project_fd is not None:
-      cfg.update(_load_toml_from_fd(project_fd))
+  for provider in active_cascade:
+    cfg = deep_merge(cfg, provider())
 
   # Extract subcommand section from TOML config if applicable
   # When @configclass(cmd="print") or @configclass(config="print") is used,
@@ -729,4 +963,15 @@ __all__ = [
   "apply_to_dict",
   "unpack_type",
   "_reset_factories",
+  # Config override cascade (P1-006)
+  "ConfigProvider",
+  "UserConfigProvider",
+  "ProjectConfigProvider",
+  "DEFAULT_CASCADE",
+  "deep_merge",
+  # Public TOML API (P1-006)
+  "load",
+  "loads",
+  "load_toml",
+  "loads_toml",
 ]
