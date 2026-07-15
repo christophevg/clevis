@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurable Default Subcommand**: `@configclass` now accepts a `default_cmd`
+  parameter. When True (requires `cmd`), the subcommand runs automatically when no
+  subcommand is specified on the CLI.
+
 - **Configurable Config Override Cascade**: `get_config()` now accepts an
   optional `cascade` parameter — a list of `ConfigProvider` instances that
   replace the default middle layers (user-TOML and project-TOML).

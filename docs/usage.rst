@@ -822,6 +822,43 @@ All aliases normalize to the actual command name internally:
    cmd = get_cmd(args=["chk"])
    # cmd == "check"
 
+Default Subcommand
+~~~~~~~~~~~~~~~~~~
+
+Run a subcommand automatically when no subcommand is specified on the CLI:
+
+.. code-block:: python
+
+   from clevis import configclass, get_cmd, get_config
+
+   @configclass(cmd="check", default_cmd=True, help="Run diagnostics")
+   class CheckConfig:
+       verbose: bool = False
+
+   @configclass(cmd="build", help="Build the project")
+   class BuildConfig:
+       output: str = "dist"
+
+   if __name__ == "__main__":
+       cmd = get_cmd()
+       # No subcommand → cmd == "check" (default_cmd=True)
+       # "python app.py --verbose" → runs check with verbose=True
+       # "python app.py build" → runs build (explicit subcommand)
+       # "python app.py check --verbose" → runs check (explicit subcommand)
+
+       if cmd == "check":
+           config = get_config(CheckConfig, project=False, user=False)
+           print(f"Checking with verbose={config.verbose}")
+       elif cmd == "build":
+           config = get_config(BuildConfig, project=False, user=False)
+           print(f"Building to {config.output}")
+
+.. note::
+
+   ``default_cmd`` requires ``cmd`` to be set. Setting ``default_cmd=True``
+   without ``cmd`` raises ``ValueError``. Only one subcommand should have
+   ``default_cmd=True``; multiple defaults raise an error.
+
 How Subcommands Work
 ~~~~~~~~~~~~~~~~~~~~
 
