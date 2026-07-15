@@ -29,20 +29,27 @@ src/clevis/
 ### Data Flow
 
 Configuration sources merge in priority order:
-1. Dataclass defaults (lowest)
-2. User TOML (~/.name.toml)
-3. Project TOML (./name.toml)
-4. CLI arguments (highest)
+1. Dataclass defaults (lowest, filled by dacite)
+2. Middle cascade (default: user TOML then project TOML, deep-merged)
+3. CLI arguments (highest, with list-append semantics)
 
-Result converted to dataclass instance via dacite.
+The middle cascade is a list of `ConfigProvider` instances. When `cascade=None`,
+`DEFAULT_CASCADE` is instantiated with `name`/`security` and filtered by
+`user`/`project` flags. Subcommand `[cmd]` sections are extracted as a fixed
+post-cascade transform. Result is converted to a dataclass instance via dacite.
 
 ### Module Responsibilities
 
 **__init__.py**: Public API, configuration loading orchestration
-- `get_config()` - Load configuration from all sources
+- `get_config()` - Load configuration from all sources (cascade + CLI)
 - `get_cmd()` - Get active subcommand
+- `ConfigProvider` - Protocol for pluggable config sources
+- `UserConfigProvider` / `ProjectConfigProvider` - Default TOML providers (public)
+- `DEFAULT_CASCADE` - Tuple of default provider classes
+- `deep_merge()` - Recursive dict merge for cascade layer
+- `load()` / `loads()` / `load_toml` / `loads_toml` - Public TOML parsers (raw)
 - `_get_toml_parser()` - Select TOML parser (envtoml → tomlev → tomli → tomllib)
-- `_check_file_permissions()` - TOCTOU-safe security validation
+- `_check_file_permissions()` - TOCTOU-safe security validation (used by providers)
 - `_merge_list_args()` - Merge CLI list args with TOML values
 
 **factory.py**: Factory pattern & CLI generation
@@ -397,6 +404,48 @@ entire subtree (no recursion); descendants with `cli=True` remain excluded.
 
 **Strict trigger**: Only explicit `False` excludes. `None`, `0`, `""` are all
 INCLUDED (they are not `False` via identity check).
+
+### Config Override Cascade + Public TOML API (P1-006)
+
+The config loading pipeline was generalized into a pluggable cascade so
+external integrators can inject dict-providers at arbitrary positions, and the
+TOML parser was exposed as public API.
+
+**New public API** (all in `clevis` namespace):
+
+- `ConfigProvider` — `runtime_checkable` Protocol: zero-argument callable
+  returning `dict[str, Any]`, owning its own security, raising on failure.
+- `UserConfigProvider` / `ProjectConfigProvider` — default provider classes
+  that load `~/.{name}.toml` and `./{name}.toml` respectively. They encapsulate
+  the TOCTOU-safe FD access pattern (`os.open` → `os.fstat` → read from same
+  FD) and the file/directory permission checks previously inlined in
+  `get_config()`. They are public, reusable building blocks for custom cascades.
+- `DEFAULT_CASCADE` — `tuple[type[ConfigProvider], ...]` =
+  `(UserConfigProvider, ProjectConfigProvider)`. Classes (not instances)
+  because they need `name` and `security` at runtime.
+- `deep_merge(base, overlay)` — public recursive dict merge. Nested dicts
+  recurse; all other types (lists, scalars) are replaced by the overlay.
+  Inputs are not modified. This is distinct from `apply_to_dict` (which
+  operates on dotted CLI keys).
+- `load(fp)` / `loads(s)` / `load_toml` / `loads_toml` — public RAW TOML
+  parsers (no security checks) with stdlib-compatible signatures, using the
+  same parser selection chain (envtoml > tomlev > tomli > tomllib).
+
+**`get_config()` cascade architecture**: The middle layer (user TOML +
+project TOML) is now built from `DEFAULT_CASCADE` when `cascade=None`, filtered
+by `user`/`project` flags. When `cascade` is a list of `ConfigProvider`
+instances, those replace the middle layer and `user`/`project`/`security` are
+ignored (an info log is emitted if `security` is also supplied). `defaults`
+(dataclass defaults filled by dacite) and `cli` (list-append semantics) remain
+fixed non-reorderable bookends. Subcommand TOML extraction (`[cmd]` section pop)
+remains a fixed post-cascade transform.
+
+**Breaking change**: the middle cascade now uses **deep merge** instead of
+shallow `dict.update`. Nested tables merge key-by-key instead of being replaced
+wholesale. This is documented in CHANGELOG.md with a security note: deep merge
+lets a compromised config source surgically override individual nested
+security-relevant fields. List fields are still replaced (not appended) in the
+cascade; only CLI args append.
 
 ### Default Subcommand (P1-005)
 

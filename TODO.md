@@ -22,7 +22,7 @@ Completed via PR #34 (P1-005).
 
 Blocks the Yoker project (to be combined with issue #32 into a new Clevis release). Generalizes the config cascade so external integrators (e.g. Yoker) can inject dict-providers at arbitrary positions, and exposes the TOML parser as public API.
 
-- [ ] **P1-006: Implement configurable config override cascade and public TOML API**
+- [ ] **P1-006: Implement configurable config override cascade and public TOML API** ⏳ 2026-07-15 (PR #35)
   - Define a `ConfigProvider` Protocol: a callable returning a `dict`, raising on failure, owning its own security/validation. No richer interface.
   - `get_config` accepts an optional `cascade` argument: a list of `ConfigProvider` instances replacing the default middle layers.
   - Expose the default cascade (e.g. `DEFAULT_CASCADE`) containing the user-TOML and project-TOML providers.
@@ -49,6 +49,7 @@ Blocks the Yoker project (to be combined with issue #32 into a new Clevis releas
     - Existing behavior is preserved when `cascade` is not provided (minus the shallow→deep merge change)
     - Backward compatibility: the shallow→deep merge change is documented as a breaking change in the changelog
     - All existing tests pass; new tests cover the cascade, deep merge, custom providers, and public TOML API
+  - **Status**: Implementation complete, pending review (PR #35)
   - **GitHub Issue**: #33
   - **Priority**: P1 (blocks Yoker project; to be combined with issue #32 into a new Clevis release)
 

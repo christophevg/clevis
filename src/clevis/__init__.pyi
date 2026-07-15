@@ -8,7 +8,7 @@ from argparse import Action, Namespace
 from collections.abc import Callable
 from dataclasses import Field, dataclass
 from enum import Enum
-from typing import Any, Protocol, TypedDict, TypeVar
+from typing import Any, BinaryIO, Protocol, TypedDict, TypeVar, runtime_checkable
 
 # Type Variables
 
@@ -164,6 +164,81 @@ class ConfigError(Exception):
     suggest_cli: bool = ...,
   ) -> None: ...
 
+# Config Override Cascade (P1-006)
+
+@runtime_checkable
+class ConfigProvider(Protocol):
+  """Callable protocol that provides a configuration dict.
+
+  Each provider owns its own security/validation and raises on failure.
+  """
+
+  def __call__(self) -> dict[str, Any]:
+    """Return a configuration dict. Raise on failure."""
+    ...
+
+class UserConfigProvider:
+  """ConfigProvider that loads user-level TOML (~/.{name}.toml).
+
+  Owns its own security checks (file and directory permissions, TOCTOU-safe
+  FD access). If the file does not exist, returns an empty dict.
+  """
+
+  def __init__(
+    self,
+    name: str,
+    security: SecurityConfig | None = ...,
+  ) -> None: ...
+  def __call__(self) -> dict[str, Any]: ...
+
+class ProjectConfigProvider:
+  """ConfigProvider that loads project-level TOML (./{name}.toml).
+
+  Owns its own security checks (file and directory permissions, TOCTOU-safe
+  FD access). If the file does not exist, returns an empty dict.
+  """
+
+  def __init__(
+    self,
+    name: str,
+    security: SecurityConfig | None = ...,
+  ) -> None: ...
+  def __call__(self) -> dict[str, Any]: ...
+
+DEFAULT_CASCADE: tuple[type[ConfigProvider], ...]
+"""Default cascade of provider classes (user-TOML, then project-TOML)."""
+
+def deep_merge(
+  base: dict[str, Any],
+  overlay: dict[str, Any],
+) -> dict[str, Any]:
+  """Recursively merge overlay onto base, returning a new dict.
+
+  Nested dicts are merged recursively; all other types (lists, scalars) are
+  replaced by the overlay value. Inputs are not modified.
+  """
+  ...
+
+# Public TOML API (P1-006)
+
+def load(fp: BinaryIO) -> dict[str, Any]:
+  """Load TOML from a binary file object. Drop-in for tomllib.load.
+
+  RAW parser — no security checks.
+  """
+  ...
+
+def loads(s: str) -> dict[str, Any]:
+  """Load TOML from a string. Drop-in for tomllib.loads.
+
+  RAW parser — no security checks.
+  """
+  ...
+
+# Descriptive aliases
+load_toml: Callable[[BinaryIO], dict[str, Any]]
+loads_toml: Callable[[str], dict[str, Any]]
+
 # Functions
 
 def get_config(
@@ -174,32 +249,35 @@ def get_config(
   cli: bool = ...,
   args: list[str] | None = ...,
   security: SecurityConfig | None = ...,
+  cascade: list[ConfigProvider] | None = ...,
 ) -> T:
   """
   Load configuration from TOML files and CLI arguments.
 
-  Merges configuration from (in order of precedence):
-  1. CLI arguments (highest priority) - only when cli=True or args is provided
-  2. Project-level TOML: ./{name}.toml
-  3. User-level TOML: ~/.{name}.toml
-  4. Dataclass defaults (lowest priority)
+  Middle cascade:
+      When ``cascade`` is None (default), the default cascade (user-TOML,
+      project-TOML) is used, filtered by the user/project flags. When
+      ``cascade`` is a list of ConfigProvider instances, those providers
+      replace the default middle layers and user/project flags are ignored.
 
-  TOML Parser Selection:
-      Automatically selects parser based on installed extras:
-      - envtoml: Supports ${VAR} interpolation - pip install clevis[envtoml]
-      - tomlev: Alternative parser - pip install clevis[tomlev]
-      - tomli: Pure Python - pip install clevis[tomli]
-      - tomllib: Python 3.11+ stdlib (no extras needed)
+  The middle cascade uses deep merge (recursive dict merge). CLI args are a
+  fixed last step with list-append semantics.
 
   Args:
       clz: The dataclass type to populate
       name: Configuration file name (without .toml extension)
-      user: Whether to load user-level config(~/.{name}.toml)
-      project: Whether to load project-level config (./{name}.toml)
+      user: Whether to load user-level config(~/.{name}.toml). Ignored when
+          ``cascade`` is provided.
+      project: Whether to load project-level config (./{name}.toml). Ignored
+          when ``cascade`` is provided.
       cli: Whether to parse CLI arguments from sys.argv (default: True)
       args: Optional list of CLI arguments (overrides sys.argv when provided)
-      security: Security check configuration. If None, defaults to maximally
-          strict (reject on all security issues).
+      security: Security check configuration for the default providers. If
+          None, defaults to maximally strict (reject on all security issues).
+          Ignored when ``cascade`` is provided.
+      cascade: Optional list of ConfigProvider instances replacing the
+          default middle layers. When provided, ``user``/``project`` and
+          ``security`` are ignored.
 
   Returns:
       An instance of the dataclass with merged configuration
