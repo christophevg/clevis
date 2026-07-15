@@ -11,32 +11,11 @@ Blocks another project. Owner directive: ensure the exclusion point is centraliz
 Completed via PR #31 (P1-004).
 
 
-### Phase 1.6: Configurable Default Subcommand (P1 - Critical)
+### Phase 1.6: Configurable Default Subcommand (P1 - Critical) - COMPLETE ✅
 
 Blocks the Yoker project. Allows marking a subcommand as the default so calling the CLI with no subcommand runs it instead of erroring.
 
-- [ ] **P1-005: Implement configurable default subcommand** ⏳ 2026-07-15 (PR #34)
-  - Add a `default_cmd` boolean flag alongside `cmd` on `@configclass`, e.g. `@configclass(cmd="chat", default_cmd=True)`, marking that subcommand as the default
-  - Calling the CLI with no subcommand runs the default subcommand
-  - With no default configured, behavior is unchanged (argparse errors on missing subcommand — `required=True` stays when no subcommand is marked as default)
-  - `--help` with no subcommand always shows top-level help listing all subcommands, never the default subcommand's help
-  - An unknown subcommand (e.g. `myapp foobar`) still produces an argparse error, not swallowed by the default
-  - Multiple `default_cmd=True` on different subcommands raises a clear configuration error at configuration time (the default is ambiguous)
-  - Existing subcommand features (aliases, help text, TOML section extraction) continue to work with the default subcommand
-  - The before/after-parse mechanics (applying default vs. making subparsers non-required) are left to the technical agents — choose a stable, reliable solution without excessive boilerplate
-  - **Satisfies**: (new requirement — configurable default subcommand)
-  - **Acceptance**:
-    - `@configclass(cmd="chat", default_cmd=True)` marks `chat` as the default subcommand
-    - Calling the CLI with no subcommand runs the default subcommand
-    - With no default configured, behavior is unchanged (argparse errors on missing subcommand)
-    - `--help` with no subcommand shows top-level help listing all subcommands
-    - An unknown subcommand (e.g. `myapp foobar`) still produces an argparse error
-    - Multiple `default_cmd=True` on different subcommands raises a clear configuration error
-    - Existing subcommand features (aliases, help text, TOML section extraction) continue to work with the default subcommand
-    - All existing tests pass; new tests cover the default-subcommand behavior and edge cases
-  - **Status**: Implementation complete, pending review (PR #34)
-  - **GitHub Issue**: #32
-  - **Priority**: P1 (blocks Yoker project)
+Completed via PR #34 (P1-005).
 
 
 ### Phase 1.7: Configurable Config Override Cascade (P1 - Critical)
@@ -280,6 +259,29 @@ Tasks that were reviewed and rejected with documented rationale.
   - **Reference**: https://github.com/christophevg/clevis/pull/19
 
 ## Done
+
+- [x] **P1-005: Implement configurable default subcommand** ✅ 2026-07-15 (PR #34)
+  - Add a `default_cmd` boolean flag alongside `cmd` on `@configclass`, e.g. `@configclass(cmd="chat", default_cmd=True)`, marking that subcommand as the default
+  - Calling the CLI with no subcommand runs the default subcommand
+  - With no default configured, behavior is unchanged (argparse errors on missing subcommand — `required=True` stays when no subcommand is marked as default)
+  - `--help` with no subcommand always shows top-level help listing all subcommands, never the default subcommand's help
+  - An unknown subcommand (e.g. `myapp foobar`) still produces an argparse error, not swallowed by the default
+  - Multiple `default_cmd=True` on different subcommands raises a clear configuration error at configuration time (the default is ambiguous)
+  - Existing subcommand features (aliases, help text, TOML section extraction) continue to work with the default subcommand
+  - The before/after-parse mechanics (applying default vs. making subparsers non-required) are left to the technical agents — choose a stable, reliable solution without excessive boilerplate
+  - **Satisfies**: (new requirement — configurable default subcommand)
+  - **Acceptance**:
+    - `@configclass(cmd="chat", default_cmd=True)` marks `chat` as the default subcommand
+    - Calling the CLI with no subcommand runs the default subcommand
+    - With no default configured, behavior is unchanged (argparse errors on missing subcommand)
+    - `--help` with no subcommand shows top-level help listing all subcommands
+    - An unknown subcommand (e.g. `myapp foobar`) still produces an argparse error
+    - Multiple `default_cmd=True` on different subcommands raises a clear configuration error
+    - Existing subcommand features (aliases, help text, TOML section extraction) continue to work with the default subcommand
+    - All existing tests pass; new tests cover the default-subcommand behavior and edge cases
+  - **GitHub Issue**: #32
+  - **Priority**: P1 (blocks Yoker project)
+  - **Completed**: 2026-07-15 (PR #34 merged) — https://github.com/christophevg/clevis/pull/34
 
 - [x] **P1-004: Support excluding dataclass fields from CLI argument generation** ✅ 2026-06-29 (PR #31)
   - Add metadata-based `cli=False` exclusion for dataclass fields so they are skipped during CLI argument generation while remaining loadable via config/TOML/env/defaults.
