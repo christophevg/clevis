@@ -176,30 +176,6 @@ Completed tasks from this phase have been moved to Done section. Remaining specu
   - **Reference**: Code review 2026-06-10, PR #29
 
 - [ ] **P4-001: Async configuration loading**
-  - Move global default parser assignment at `factory.py:52-53` to Factory.__init__
-  - **Acceptance**:
-    - Default parser created in Factory.__init__
-    - No module-level mutable state for default parser
-    - All tests pass
-  - **Reference**: Code review 2026-06-10
-
-- [ ] **P4-006: Add logging configuration documentation**
-  - Add note in docs about logging configuration for library users
-  - Module-level logger at `__init__.py:43` needs configuration guidance
-  - **Acceptance**:
-    - Documentation includes logging configuration section
-    - Users understand how to configure clevis logging
-  - **Reference**: Code review 2026-06-10
-
-- [ ] **P4-007: Review TypeVar T usage**
-  - TypeVar T at `configclass.py:13` declared but only used once
-  - Consider `TypeVar("T", bound=type)` or remove and use direct type annotation
-  - **Acceptance**:
-    - TypeVar properly constrained OR removed if unnecessary
-    - Type checking still works
-  - **Reference**: Code review 2026-06-10
-
-- [ ] **P4-001: Async configuration loading**
   - `get_config_async()` variant using `aiofiles`
   - Useful for async applications
   - **No owner, no demand, not scheduled**
@@ -691,5 +667,6 @@ Tasks that were reviewed and rejected with documented rationale.
 - [x] **P1-001: Create initial git commit** ✅ 2026-05-30
   - Initial commit with source, tests, docs, configuration
   - **Satisfies**: R67
+
 
 
