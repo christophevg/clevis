@@ -81,6 +81,7 @@ python app.py --name "Custom App" --port 9000
 | **Layered config** | Defaults < User < Project < CLI | Priority-based merging |
 | **Nested configs** | Hierarchical configuration | `[database] host = "localhost"` |
 | **Subcommands** | Multi-command CLI apps | `@configclass(cmd="build")` |
+| **Default subcommand** | Run command when none specified | `@configclass(cmd="check", default_cmd=True)` |
 | **Factory pattern** | Multi-module orchestration | `get_factory(Config).prefix = "app1"` |
 | **Dynamic registration** | Plugin architecture | `register_field(Parent, "plugin", PluginConfig)` |
 | **Security** | File permission validation | `SecurityAction.REJECT` (default) |
@@ -118,6 +119,9 @@ Values are merged in order (highest priority wins):
 3. **Project TOML** — `./myapp.toml`
 4. **User TOML** — `~/.myapp.toml`
 5. **Dataclass defaults** — Default values in class definition
+
+> **v0.7.0 breaking change:** User and project TOML files now use deep merge
+> (nested dicts combine key-by-key) instead of shallow replacement.
 
 ### Security
 
@@ -227,6 +231,22 @@ if __name__ == "__main__":
         print(f"Building to {config.output}")
 ```
 
+### Default Subcommand
+
+Run a subcommand automatically when none is specified:
+
+```python
+from clevis import configclass, get_cmd, get_config
+
+@configclass(cmd="check", default_cmd=True, help="Run diagnostics")
+class CheckConfig:
+    verbose: bool = False
+
+# Called without subcommand → runs "check" automatically
+cmd = get_cmd()  # "check"
+config = get_config(CheckConfig, project=False, user=False)
+```
+
 ### Dynamic Registration (Plugin Architecture)
 
 ```python
@@ -278,11 +298,17 @@ For complete API documentation, see [PACKAGE.md](PACKAGE.md) or [docs/api.rst](d
 
 **Key functions:**
 
-- `get_config(data_class, name, ...)` — Load configuration from TOML and CLI
-- `configclass(cmd=None, help=None, ...)` — Decorator for configuration classes
+- `get_config(data_class, name, ..., cascade=None)` — Load configuration from TOML and CLI
+- `configclass(cmd=None, help=None, ..., default_cmd=False)` — Decorator for configuration classes
 - `register_field(parent_class, field_name, field_type)` — Register plugin fields
 - `get_factory(config_class)` — Get Factory for multi-module apps
 - `get_cmd()` — Get active subcommand name
+- `build_default_cascade(name)` — Build default ConfigProvider cascade
+- `deep_merge(base, overlay)` — Recursive dict merge
+- `load(fp)` / `loads(s)` — Public TOML API (raw, no security)
+- `load_toml_file(path)` — Secure TOML file loader
+- `ConfigProvider` — Protocol for custom config sources
+- `UserConfigProvider` / `ProjectConfigProvider` — Built-in providers
 
 ## Documentation
 

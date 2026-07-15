@@ -34,7 +34,7 @@ print(config.name)
 
 ## Key Components
 
-### `get_config(data_class, name="project", user=True, project=True, cli=True, args=None, security=None)`
+### `get_config(data_class, name="project", user=True, project=True, cli=True, args=None, security=None, cascade=None)`
 
 Load configuration from TOML files and CLI arguments.
 
@@ -46,6 +46,7 @@ Load configuration from TOML files and CLI arguments.
 - `cli` — Parse CLI arguments from `sys.argv` (default: True)
 - `args` — CLI arguments (defaults to `sys.argv[1:]`)
 - `security` — Security check configuration (default: reject all insecure configs)
+- `cascade` — List of ConfigProvider instances replacing default middle layers (default: None). When provided, `user`/`project` and `security` are ignored.
 
 **Returns:** Instance of the dataclass with merged configuration
 
@@ -70,7 +71,7 @@ config = get_config(AppConfig, name="app")
 
 ---
 
-### `@configclass(cmd=None, help=None, aliases=None, config=None)`
+### `@configclass(cmd=None, help=None, aliases=None, config=None, default_cmd=False)`
 
 Decorator that combines `@dataclass` with factory registration.
 
@@ -80,6 +81,7 @@ Decorator that combines `@dataclass` with factory registration.
 - `help` — Help text for subcommand
 - `aliases` — List of aliases for subcommand
 - `config` — TOML section name (defaults to `cmd` value)
+- `default_cmd` — If True, this subcommand runs when no subcommand is given (requires `cmd`, default: False)
 
 ```python
 from clevis import configclass
@@ -204,7 +206,7 @@ Raised for missing/invalid configuration. Attributes: `field_path`, `message`, `
 Configuration factory for a dataclass.
 
 **Attributes:**
-- `config_class`, `prefix`, `parser`, `cmd`, `help`, `aliases`
+- `config_class`, `prefix`, `parser`, `cmd`, `help`, `aliases`, `config`, `default_cmd`
 
 **Methods:**
 - `configure_parser()` — Configure parser (automatic)
@@ -241,6 +243,82 @@ Generate argparse parser from dataclass. Returns dict with dotted keys.
 ### `apply_to_dict(args, dct)`
 
 Apply dotted CLI arguments to nested dictionary (in-place).
+
+---
+
+### `ConfigProvider`
+
+Protocol — zero-argument callable returning `dict[str, Any]`. Any function,
+lambda, or class with `__call__` satisfies it. Each provider owns its security.
+
+---
+
+### `UserConfigProvider(name, security=None)`
+
+ConfigProvider that loads `~/.{name}.toml` with TOCTOU-safe security checks.
+
+---
+
+### `ProjectConfigProvider(name, security=None)`
+
+ConfigProvider that loads `./{name}.toml` with TOCTOU-safe security checks.
+
+---
+
+### `FileConfigProvider(name, security=None)`
+
+Subclassable base for file-based TOML providers. Override `_root_dir()` and
+`_path_template` to load from custom paths with automatic security checks.
+
+---
+
+### `DEFAULT_CASCADE`
+
+Tuple of default provider classes: `(UserConfigProvider, ProjectConfigProvider)`.
+
+---
+
+### `build_default_cascade(name, security=None, user=True, project=True)`
+
+Build a list of default ConfigProvider instances, filtered by user/project flags.
+
+---
+
+### `deep_merge(base, overlay)`
+
+Recursively merge overlay onto base, returning a new dict. Nested dicts merge
+key-by-key; all other types are replaced. Inputs are not modified.
+
+---
+
+### `load(fp)` / `loads(s)`
+
+Raw TOML parsers (no security checks). Drop-in for `tomllib.load`/`tomllib.loads`.
+`load_toml`/`loads_toml` are descriptive aliases.
+
+---
+
+### `load_toml_file(path, security=None)`
+
+Securely load a TOML file with default security checks (TOCTOU-safe).
+
+---
+
+### `check_file_permissions(path, action)`
+
+TOCTOU-safe file permission check. Returns `(check_passed, file_descriptor)`.
+
+---
+
+### `check_directory_permissions(path, action)`
+
+Check if parent directory is world-writable. Returns bool.
+
+---
+
+### `load_toml_from_fd(fd)`
+
+Load TOML from a file descriptor. File object takes ownership of the fd.
 
 ## Common Patterns
 
@@ -331,6 +409,27 @@ if cmd == "run":
 elif cmd == "check":
   config = get_config(CheckConfig, name="app")
 ```
+
+### Default Subcommand
+
+Run a subcommand automatically when no subcommand is specified:
+
+```python
+from clevis import configclass, get_cmd, get_config
+
+@configclass(cmd="check", default_cmd=True, help="Run diagnostics")
+class CheckConfig:
+  verbose: bool = False
+
+# No subcommand specified → runs "check" automatically
+cmd = get_cmd()
+# cmd == "check" even when called with just --verbose (no subcommand)
+
+config = get_config(CheckConfig, name="app")
+print(config.verbose)
+```
+
+`default_cmd` requires `cmd` to be set. Multiple `default_cmd=True` raises an error.
 
 ### Dynamic Field Registration
 
@@ -426,6 +525,100 @@ config = get_config(Config, name="app", security={
 | Production | `REJECT` (default) |
 | Development | `LOG` |
 | Testing | `DONT_CHECK` |
+
+### Config Override Cascade
+
+The middle configuration layer (between dataclass defaults and CLI arguments) is
+built from a cascade of ConfigProvider instances. The default cascade loads user
+TOML then project TOML. Customize it to inject config from any source.
+
+**ConfigProvider Protocol:** Any zero-argument callable returning `dict[str, Any]`.
+A plain function, lambda, or class with `__call__` all work.
+
+```python
+from clevis import build_default_cascade, get_config
+
+def env_provider() -> dict:
+  import os
+  return {"api_key": os.environ.get("API_KEY", "")}
+
+# Append to default cascade
+cascade = build_default_cascade("myapp") + [env_provider]
+config = get_config(Config, name="myapp", cascade=cascade)
+```
+
+**Fully custom cascade:**
+
+```python
+from clevis import UserConfigProvider, ProjectConfigProvider, get_config
+
+class MyProvider:
+  def __call__(self) -> dict:
+    return {"feature_flag": True}
+
+cascade = [
+  UserConfigProvider("myapp"),
+  MyProvider(),
+  ProjectConfigProvider("myapp"),
+]
+config = get_config(Config, name="myapp", cascade=cascade)
+```
+
+When `cascade` is provided, `user`/`project` flags and `security` are ignored.
+Each provider owns its own security checks.
+
+**Deep merge:** Providers are merged with deep recursive merge — nested dicts
+combine key-by-key rather than being replaced wholesale. List values are replaced
+(not appended) in the cascade; only CLI args append to lists.
+
+**Public TOML API:**
+
+```python
+from clevis import load, loads, load_toml_file
+
+# Raw parsers (no security checks) — drop-in for tomllib
+config = loads('name = "MyApp"')
+
+# Secure file loader (TOCTOU-safe, REJECT by default)
+config = load_toml_file(Path("/path/to/config.toml"))
+```
+
+**Security helpers for custom providers:**
+
+```python
+from clevis import (
+  check_file_permissions, check_directory_permissions,
+  load_toml_from_fd, FileConfigProvider, SecurityAction
+)
+from pathlib import Path
+
+# Use exported security functions directly
+class CustomFileProvider:
+  def __init__(self, path: Path):
+    self._path = path
+
+  def __call__(self) -> dict:
+    check_directory_permissions(self._path, SecurityAction.REJECT)
+    _, fd = check_file_permissions(self._path, SecurityAction.REJECT)
+    if fd is None:
+      return {}
+    return load_toml_from_fd(fd)
+
+# Or subclass FileConfigProvider for automatic security checks
+class CustomPathProvider(FileConfigProvider):
+  _path_template = "{name}.toml"
+
+  def __init__(self, base_dir: Path, name: str, **kwargs):
+    self._base_dir = base_dir
+    super().__init__(name, **kwargs)
+
+  def _root_dir(self) -> Path:
+    return self._base_dir
+```
+
+**Breaking change (v0.7.0):** Shallow `dict.update` → deep recursive merge for
+config cascade. Nested tables now merge key-by-key. A project TOML `[database]`
+section adds to (not replaces) the user TOML `[database]` section.
 
 ### Testing
 

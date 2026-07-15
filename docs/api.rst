@@ -56,6 +56,12 @@ Config Override Cascade (P1-006)
 The config override cascade enables pluggable config sources (providers)
 that are deep-merged between dataclass defaults and CLI arguments.
 
+.. warning::
+
+   **v0.7.0 breaking change:** The merge of user-level and project-level TOML files
+   changed from shallow (``dict.update``) to deep (recursive dict merge). Nested
+   tables now merge key-by-key instead of being replaced wholesale.
+
 .. autoclass:: clevis.ConfigProvider
    :members:
    :member-order: bysource
@@ -124,36 +130,51 @@ All public functions are fully type-hinted. Here are the key type signatures:
 
 .. code-block:: python
 
-   from typing import Any, Callable, Protocol, Type, TypeVar
-   from dataclasses import Field
+   from typing import Any, BinaryIO, Callable, Protocol, TypeVar, runtime_checkable
+   from dataclasses import Field, dataclass
    from argparse import Action, Namespace
+   from enum import Enum
+   from pathlib import Path
+
+   T = TypeVar("T")
 
    # Main functions
    def get_config(
-       clz: type,
+       clz: type[T],
        name: str = "project",
        user: bool = True,
        project: bool = True,
        cli: bool = True,
        args: list[str] | None = None,
-   ) -> Any: ...
+       security: SecurityConfig | None = None,
+       cascade: list[ConfigProvider] | None = None,
+   ) -> T: ...
 
-   def get_cmd(parser=None) -> str | None: ...
+   def get_cmd(parser=None, args: list[str] | None = None) -> str | None: ...
 
    # Factory pattern
-   def configclass(cls=None, cmd=None) -> type: ...
+   def configclass(
+       cls: type[T] | None = None,
+       cmd: str | None = None,
+       help: str | None = None,
+       aliases: list[str] | None = None,
+       config: str | None = None,
+       default_cmd: bool = False,
+   ) -> type[T] | Callable[[type[T]], type[T]]: ...
 
    def get_factory(clz: type) -> Factory: ...
-
-   T = TypeVar('T')
 
    @dataclass
    class Factory:
        config_class: type
        prefix: str | None = None
-       parser: Parser = field(default_factory=lambda: _default_parser)
+       parser: Parser = ...
        cmd: str | None = None
-       sub_parser: Parser | None = field(init=False, default=None)
+       help: str | None = None
+       aliases: list[str] | None = None
+       config: str | None = None
+       default_cmd: bool = False
+       sub_parser: Parser | None = ...
        _configured: bool = False
 
        def configure_parser(self) -> None: ...
@@ -176,17 +197,51 @@ All public functions are fully type-hinted. Here are the key type signatures:
            **kwargs: Any
        ) -> Action: ...
 
-       def add_subparsers(self, **kwargs) -> SubParser: ...
-
+       def add_subparsers(self, **kwargs: Any) -> SubParser: ...
        def parse_args(self, args: list[str] | None = None) -> Namespace: ...
+       def parse_known_args(self, args: list[str] | None = None) -> tuple[Namespace, list[str]]: ...
 
    class SubParser(Protocol):
-       def add_parser(self, name: str, **kwargs) -> Parser: ...
+       required: bool
+       def add_parser(self, name: str, help: str | None = ..., aliases: list[str] | None = ..., **kwargs: Any) -> Parser: ...
+
+   # Config Override Cascade
+   @runtime_checkable
+   class ConfigProvider(Protocol):
+       def __call__(self) -> dict[str, Any]: ...
+
+   class FileConfigProvider:
+       _path_template: str
+       def __init__(self, name: str, security: SecurityConfig | None = None) -> None: ...
+       def _root_dir(self) -> Path: ...
+       def __call__(self) -> dict[str, Any]: ...
+
+   class UserConfigProvider(FileConfigProvider): ...
+   class ProjectConfigProvider(FileConfigProvider): ...
+
+   DEFAULT_CASCADE: tuple[type[ConfigProvider], ...]
+
+   def build_default_cascade(
+       name: str,
+       security: SecurityConfig | None = None,
+       user: bool = True,
+       project: bool = True,
+   ) -> list[ConfigProvider]: ...
+
+   def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]: ...
+
+   # Public TOML API
+   def load(fp: BinaryIO) -> dict[str, Any]: ...
+   def loads(s: str) -> dict[str, Any]: ...
+   load_toml: Callable[[BinaryIO], dict[str, Any]]
+   loads_toml: Callable[[str], dict[str, Any]]
+
+   # Security helpers
+   def check_file_permissions(path: Path, action: SecurityAction) -> tuple[bool, int | None]: ...
+   def check_directory_permissions(path: Path, action: SecurityAction) -> bool: ...
+   def load_toml_from_fd(fd: int) -> dict[str, Any]: ...
+   def load_toml_file(path: Path, security: SecurityConfig | None = None) -> dict[str, Any]: ...
 
    # Utilities
    def unpack_type(type_def: type) -> type: ...
-
-   def apply_to_dict(
-       args: dict[str, Any],
-       dct: dict[str, Any]
-   ) -> None: ...
+   def apply_to_dict(args: dict[str, Any], dct: dict[str, Any]) -> None: ...
