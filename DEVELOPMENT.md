@@ -89,6 +89,10 @@ class CheckConfig:
 @configclass(cmd="cli", config="client")
 class CliConfig:
   server_url: str = "http://localhost"
+
+@configclass(cmd="chat", default_cmd=True)
+class ChatConfig:
+  model: str = "gpt-4"
 ```
 
 ### 3. Parser Protocol
@@ -393,6 +397,34 @@ entire subtree (no recursion); descendants with `cli=True` remain excluded.
 
 **Strict trigger**: Only explicit `False` excludes. `None`, `0`, `""` are all
 INCLUDED (they are not `False` via identity check).
+
+### Default Subcommand (P1-005)
+
+A subcommand can be marked as the default using `default_cmd=True` on
+`@configclass`. When no subcommand is given on the CLI, the default subcommand
+runs instead of argparse erroring with "the following arguments are required".
+
+```python
+@configclass(cmd="chat", default_cmd=True)
+class ChatConfig:
+  model: str = "gpt-4"
+```
+
+**Design**: The `default_cmd` flag is stored on `Factory` and tracked in a
+module-level `_default_cmds: dict[Parser, str]` mapping in `factory.py`. During
+`configure_parser()`, when a factory with `default_cmd=True` is configured, it
+registers the default in `_default_cmds` and sets `subparsers.required = False`.
+Multiple `default_cmd=True` on the same parser raises `ValueError` at
+configuration time.
+
+Parsing is handled by `_parse_with_default()` in `factory.py`, which uses
+`parse_known_args` as a first pass to detect if a subcommand is present. If no
+subcommand is given (and no invalid positional), the default subcommand name is
+prepended to the args before a full `parse_args`. Options belonging to the
+default subcommand (e.g., `--model claude` without a subcommand name) are
+correctly routed via this mechanism. `--help` with no subcommand still shows
+top-level help. Unknown subcommands still produce argparse errors. Both
+`get_cmd()` and `Factory.get_args()` use `_parse_with_default()`.
 
 ### Examples
 

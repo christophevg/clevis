@@ -48,6 +48,7 @@ class TestTomlevFallback:
 
     # Mock the import at the module level where it's used
     import sys
+
     original_envtoml = sys.modules.get("envtoml")
     original_tomlev = sys.modules.get("tomlev")
 
@@ -640,11 +641,15 @@ class TestBooleanCLIArguments:
       debug: bool = False
 
     # --debug then --no-debug: last wins
-    config = get_config(Config, name="test", user=False, project=False, args=["--debug", "--no-debug"])
+    config = get_config(
+      Config, name="test", user=False, project=False, args=["--debug", "--no-debug"]
+    )
     assert config.debug is False
 
     # --no-debug then --debug: last wins
-    config = get_config(Config, name="test", user=False, project=False, args=["--no-debug", "--debug"])
+    config = get_config(
+      Config, name="test", user=False, project=False, args=["--no-debug", "--debug"]
+    )
     assert config.debug is True
 
   def test_boolean_from_toml_with_cli_override(self):
@@ -657,7 +662,7 @@ class TestBooleanCLIArguments:
 
     with tempfile.TemporaryDirectory() as tmpdir:
       config_file = Path(tmpdir) / "test.toml"
-      config_file.write_text('debug = true\n')
+      config_file.write_text("debug = true\n")
 
       original_dir = os.getcwd()
       try:
@@ -677,7 +682,7 @@ class TestBooleanCLIArguments:
         assert config.debug is False
 
         # CLI --debug overrides TOML false
-        config_file.write_text('debug = false\n')
+        config_file.write_text("debug = false\n")
         config = get_config(
           Config,
           name="test",
@@ -749,7 +754,7 @@ class TestComplexUnionTypes:
         assert config.value == "test"
 
         # Int value
-        config_file.write_text('value = 42\n')
+        config_file.write_text("value = 42\n")
         config = get_config(
           Config,
           name="test",

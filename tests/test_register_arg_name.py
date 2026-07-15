@@ -172,4 +172,3 @@ class TestRegisterArgNameIntegration:
     # Verify only the new registration exists
     assert not _registry.is_arg_name_registered(parser, "--before-reset")
     assert _registry.is_arg_name_registered(parser, "--after-reset")
-
