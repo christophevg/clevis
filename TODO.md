@@ -38,6 +38,41 @@ Blocks the Yoker project. Allows marking a subcommand as the default so calling 
   - **Priority**: P1 (blocks Yoker project)
 
 
+### Phase 1.7: Configurable Config Override Cascade (P1 - Critical)
+
+Blocks the Yoker project (to be combined with issue #32 into a new Clevis release). Generalizes the config cascade so external integrators (e.g. Yoker) can inject dict-providers at arbitrary positions, and exposes the TOML parser as public API.
+
+- [ ] **P1-006: Implement configurable config override cascade and public TOML API**
+  - Define a `ConfigProvider` Protocol: a callable returning a `dict`, raising on failure, owning its own security/validation. No richer interface.
+  - `get_config` accepts an optional `cascade` argument: a list of `ConfigProvider` instances replacing the default middle layers.
+  - Expose the default cascade (e.g. `DEFAULT_CASCADE`) containing the user-TOML and project-TOML providers.
+  - The `user` and `project` flags remove their respective providers from the active cascade.
+  - `defaults` is a fixed first bookend; `cli` is a fixed last bookend with list-append semantics — neither is reorderable via `cascade`. Users control CLI via the existing `cli` flag.
+  - The entire middle cascade uses deep merge (recursive dict merge), changing existing user→project behavior from shallow (`dict.update`) to deep. This is a documented breaking change.
+  - Subcommand TOML extraction (e.g. `[print]` → root) remains a fixed post-cascade transform operating on the final merged dict. Dict-providers can contribute `[cmd]` sections that are consolidated by deep merge and then extracted.
+  - Expose public `load_toml(fp)` and `loads_toml(str)` functions following stdlib interface conventions. Ideally without the `_toml` suffix to enable drop-in stdlib replacement from the Clevis namespace.
+  - List fields: override providers replace the entire list; CLI args append to the resulting list.
+  - Existing behavior is preserved when `cascade` is not provided (minus the shallow→deep merge change).
+  - The shallow→deep merge change is documented as a breaking change in the changelog.
+  - **Satisfies**: (new requirement — configurable cascade + public TOML API)
+  - **Acceptance**:
+    - A `ConfigProvider` Protocol is defined: a callable returning a `dict`, raising on failure, owning its own security
+    - `get_config` accepts an optional `cascade` argument: a list of `ConfigProvider` instances replacing the default middle layers
+    - The default cascade is exposed (e.g. `DEFAULT_CASCADE`) containing the user-TOML and project-TOML providers
+    - The `user` and `project` flags remove their respective providers from the active cascade
+    - `defaults` is a fixed first bookend; `cli` is a fixed last bookend with list-append semantics — neither is reorderable via `cascade`
+    - The entire middle cascade uses deep merge (recursive dict merge), changing existing user→project behavior from shallow to deep
+    - Subcommand TOML extraction (e.g. `[print]` → root) remains a fixed post-cascade transform operating on the final merged dict
+    - Custom providers can contribute `[cmd]` sections that are consolidated by deep merge and then extracted
+    - Public `load_toml(fp)` and `loads_toml(str)` functions are exposed, following stdlib interface conventions
+    - List fields: override providers replace the entire list; CLI args append to the resulting list
+    - Existing behavior is preserved when `cascade` is not provided (minus the shallow→deep merge change)
+    - Backward compatibility: the shallow→deep merge change is documented as a breaking change in the changelog
+    - All existing tests pass; new tests cover the cascade, deep merge, custom providers, and public TOML API
+  - **GitHub Issue**: #33
+  - **Priority**: P1 (blocks Yoker project; to be combined with issue #32 into a new Clevis release)
+
+
 ### Phase 2: Dynamic Field Registration (P2 - High) - COMPLETE ✅
 
 Plugin configuration support for architectures like Yoker.
