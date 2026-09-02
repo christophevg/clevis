@@ -27,3 +27,5 @@ htmlcov/
 # Documentation
 docs/_build/
 reporting
+/local
+*.local

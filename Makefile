@@ -1,6 +1,6 @@
--include ~/.claude/Makefile
+-include ~/.yoker/Makefile
 
-.PHONY: help env-dev env-run test test-cov test-all run format lint typecheck check build pre-publish publish publish-test clean clean-all
+.PHONY: env-dev env-run test test-cov test-all run format lint typecheck check build pre-publish publish publish-test clean clean-all
 
 env-dev: ## Install all dependencies (dev + docs)
 	uv sync --all-extras
@@ -64,5 +64,3 @@ clean: ## Remove build artifacts
 
 clean-all: clean ## Remove virtualenv and lock file
 	rm -rf .venv uv.lock
-
-

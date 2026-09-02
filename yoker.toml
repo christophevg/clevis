@@ -1,0 +1,5 @@
+[agents.directories]
+c3 = "../c3/agents"
+
+[skills.directories]
+c3 = "../c3/skills"
