@@ -21,7 +21,10 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Typing :: Typed",
 ]
-dependencies = ["dacite"]
+dependencies = [
+    "dacite",
+    "rich>=15.0.0",
+]
 
 [project.optional-dependencies]
 tomli = ["tomli"]

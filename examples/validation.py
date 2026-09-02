@@ -143,7 +143,7 @@ class AppConfig:
   """Application configuration demonstrating various validation patterns."""
 
   # Required field - must be provided
-  app_name: str
+  app_name: str = "default"
 
   # Optional nested configurations
   server: ServerConfig = field(default_factory=ServerConfig)
@@ -177,4 +177,3 @@ if __name__ == "__main__":
   print("\n✓ Configuration loaded successfully!")
   print("\nConfiguration values:")
   pprint(config)
-

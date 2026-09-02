@@ -43,16 +43,17 @@ Example TOML file (app.toml or .app.toml):
 """
 
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from rich.pretty import pprint
 
-from clevis import get_config, SecurityAction
+from clevis import SecurityAction, get_config
 
 
 @dataclass
 class DatabaseConfig:
   """Database connection configuration."""
-  host: str
+  host: str | None = None
   port: int | None = None
   user: str | None = None
   password: str | None = None
@@ -73,16 +74,8 @@ class FeaturesConfig:
   name: str | None = None
 
 
-from urllib.parse import urlparse
-
-
 @dataclass
 class AppConfig:
-  """Main application configuration.
-
-  Demonstrates nested configuration objects and post-init validation.
-  The __post_init__ method validates server_url format.
-  """
   app_name: str | None = None
   debug: bool = True
   environment: str | None = None
