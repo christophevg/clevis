@@ -398,6 +398,18 @@ Optional improvements for future releases:
 - **P3-011-P3-015**: Various code quality improvements
 - **P3-004**: Achieve 90%+ test coverage
 
+### Released Since v0.7.0 (2026-07)
+
+Functional additions shipped after the original analysis (see CHANGELOG /
+PACKAGE.md for details):
+
+- **CLI field exclusion** (P1-004, PR #31): central hook to omit fields from CLI generation.
+- **Configurable default subcommand** (P1-005): `default_cmd=True` runs a subcommand when none is given.
+- **Configurable config override cascade** (P1-006): pluggable `ConfigProvider` middle layers with deep recursive merge (v0.7.0 breaking change from shallow merge); public TOML API `load`/`loads`/`load_toml_file`.
+- **rich** added as a core runtime dependency (used by the examples' pretty output and tooling).
+- **Keyring interpolation** (v0.8.0): `${keyring:service/username}` placeholders expanded against the system keyring before parsing (lazy optional dependency, works with every TOML backend).
+- **`clevis` console command** (v0.8.0): `clevis keyring set` interactive secret storage; `clevis cat` dumps a TOML file as fully interpreted (JSON).
+
 ### Phase 4: Parking Lot (Speculative)
 
 Ideas with no current demand:
@@ -544,9 +556,11 @@ tests/
 | Package | Purpose | Required |
 |---------|---------|----------|
 | dacite | Dict-to-dataclass conversion | Yes |
+| rich | Pretty-printing (examples, tooling) | Yes |
 | envtoml | TOML + env vars | Optional |
 | tomlev | TOML + env defaults | Optional |
 | tomli | Pure Python TOML | Optional |
+| keyring | `${keyring:...}` secret interpolation | Optional |
 
 ---
 

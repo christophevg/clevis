@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `clevis cat <file>` dumps a TOML file as fully interpreted by Clevis
     (keyring + env-var interpolation applied) as JSON — a debug helper for
     config loading issues.
+- **rich dependency**: `rich` is now a core runtime dependency (>=15.0.0),
+  used for pretty-printed output in the bundled examples.
 
 ## 0.7.0 (2026-07-15)
 
