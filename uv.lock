@@ -307,7 +307,7 @@ requires-dist = [
     { name = "tomlev", marker = "extra == 'tomlev'" },
     { name = "tomli", marker = "extra == 'tomli'" },
     { name = "tox", marker = "extra == 'dev'" },
-    { name = "twine", marker = "extra == 'dev'" },
+    { name = "twine", marker = "extra == 'dev'", specifier = ">=6.2" },
 ]
 provides-extras = ["tomli", "envtoml", "tomlev", "keyring", "dev", "docs"]
 

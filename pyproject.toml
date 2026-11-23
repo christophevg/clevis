@@ -31,7 +31,7 @@ tomli = ["tomli"]
 envtoml = ["envtoml"]
 tomlev = ["tomlev"]
 keyring = ["keyring>=25"]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "tox", "twine"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "tox", "twine>=6.2"]
 docs = ["sphinx>=7.0.0", "sphinx-rtd-theme>=2.0.0", "myst-parser>=2.0.0"]
 [project.scripts]
 clevis = "clevis.cli:main"
@@ -43,6 +43,10 @@ Repository = "https://github.com/christophevg/clevis"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/clevis"]
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
