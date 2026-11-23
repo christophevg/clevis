@@ -80,6 +80,40 @@ Example TOML:
 
    The ``|default`` syntax provides a fallback when the environment variable is not set.
 
+Keyring Secret Support
+~~~~~~~~~~~~~~~~~~~~~~
+
+The ``keyring`` extra enables ``${keyring:service/username}`` placeholders
+resolved against the system keyring:
+
+.. code-block:: bash
+
+   pip install clevis[keyring]
+
+Example TOML:
+
+.. code-block:: toml
+
+   [database]
+   password = "${keyring:myapp/db-password}"
+
+Store the secret with the interactive helper (nothing lands in shell
+history):
+
+.. code-block:: bash
+
+   clevis keyring set myapp db-password
+
+To inspect a TOML file as fully interpreted by Clevis (interpolation
+applied), use ``clevis cat myapp.toml``.
+
+.. note::
+
+   ``keyring`` is imported lazily — only when a placeholder is actually
+   encountered. Installs that never use the syntax keep no extra
+   dependency (e.g. container images). Expansion is performed by Clevis
+   itself before any TOML parser runs, so it works with every backend.
+
 Choosing Your Parser
 --------------------
 
@@ -93,6 +127,8 @@ Choosing Your Parser
 | ``envtoml``      | ``${VAR}`` interpolation   | Environment-based configuration          |
 +------------------+----------------------------+------------------------------------------+
 | ``tomlev``       | ``${VAR|default}`` syntax  | Env vars with fallback defaults          |
++------------------+----------------------------+------------------------------------------+
+| ``keyring``      | Keyring ``${keyring:...}`` | Secrets without plaintext configs        |
 +------------------+----------------------------+------------------------------------------+
 
 Priority Order
@@ -182,19 +218,20 @@ To verify your installation:
 Check TOML Parser
 ~~~~~~~~~~~~~~~~~
 
-To check which TOML parser is being used:
+To check which TOML backend is being used:
 
 .. code-block:: python
 
    from clevis import _get_toml_parser
 
-   parser = _get_toml_parser()
-   print(f"Using parser: {parser.__module__}")
+   loader = _get_toml_parser()
+   print(f"Using loader: {loader.__name__}")
 
    # Output examples:
-   # Using parser: tomllib (Python 3.11+)
-   # Using parser: tomli (Python 3.10)
-   # Using parser: envtoml (with env var support)
+   # load_envtoml  (env var interpolation - clevis[envtoml])
+   # load_tomlev   (env vars with defaults - clevis[tomlev])
+   # load_tomli    (Python 3.10)
+   # load_tomllib  (stdlib, Python 3.11+)
 
 Troubleshooting
 ---------------

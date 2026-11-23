@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 0.8.0 (2026-11-23)
+
+### Added
+
+- **Keyring Interpolation**: `${keyring:service/username}` placeholders in TOML
+  configuration files are expanded against the system keyring before parsing.
+  - Clevis-owned pre-parse pass: works with every TOML backend (envtoml,
+    tomlev, tomli, tomllib) — no backend support required.
+  - `keyring` is imported lazily — only when a placeholder is actually
+    encountered. Installs that never use the syntax stay dependency-free.
+  - Missing package or missing entry raises a clear error
+    (`clevis.keyring.KeyringError`, re-exported as `clevis.KeyringError`).
+  - Syntax splits on the FIRST `/`: the username may contain `/`.
+  - New `clevis` console command:
+    `clevis keyring set <service> <username>` stores secrets interactively
+    via getpass — no secrets in shell history. Requires the new `keyring`
+    extra (`pip install clevis[keyring]`).
+  - `clevis cat <file>` dumps a TOML file as fully interpreted by Clevis
+    (keyring + env-var interpolation applied) as JSON — a debug helper for
+    config loading issues.
+
 ## 0.7.0 (2026-07-15)
 
 ### Added

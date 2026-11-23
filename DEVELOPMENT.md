@@ -54,7 +54,8 @@ post-cascade transform. Result is converted to a dataclass instance via dacite.
 - `check_directory_permissions()` - World-writable directory check (public)
 - `load_toml_from_fd()` - Load TOML from file descriptor (public, fd ownership transferred)
 - `load_toml_file()` - All-in-one secure TOML file loader (public convenience)
-- `_get_toml_parser()` - Select TOML parser (envtoml → tomlev → tomli → tomllib)
+- `_load_toml()` - Load TOML, expanding ${keyring:...} placeholders first
+- `_get_toml_parser()` - Select TOML loader (envtoml → tomlev → tomli → tomllib)
 - `_merge_list_args()` - Merge CLI list args with TOML values
 
 **factory.py**: Factory pattern & CLI generation

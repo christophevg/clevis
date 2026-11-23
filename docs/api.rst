@@ -39,6 +39,16 @@ Exceptions
    :members: __init__, _format_message
    :member-order: bysource
 
+.. autoclass:: clevis.KeyringError
+
+Keyring Interpolation
+---------------------
+
+``${keyring:service/username}`` placeholders in TOML configuration are
+expanded against the system keyring before parsing. Requires the
+``keyring`` extra (``pip install clevis[keyring]``), imported lazily only
+when a placeholder is actually encountered. See :mod:`clevis.keyring`.
+
 Helper Functions
 ----------------
 

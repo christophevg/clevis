@@ -15,6 +15,8 @@ Clevis provides type-safe configuration management for Python applications:
 - **Dataclass schemas** — Define config structure with Python dataclasses
 - **TOML support** — Load from `.toml` files with automatic discovery
 - **Env vars** — `${VAR}` interpolation (with envtoml/tomlev extras)
+- **Keyring** — `${keyring:service/username}` secret interpolation (optional extra)
+- **`clevis` CLI** — `clevis cat file.toml` dumps the fully interpreted config (debug helper); `clevis keyring set` stores secrets interactively
 - **CLI generation** — Auto-generate argparse from dataclass
 - **Layered config** — User config < project config < CLI args
 - **Subcommands** — Build CLI apps with multiple commands
@@ -31,6 +33,9 @@ pip install clevis
 
 # Or with environment variable support
 pip install clevis[envtoml]
+
+# Or with keyring (system keychain) secret support
+pip install clevis[keyring]
 ```
 
 ```python
@@ -96,6 +101,7 @@ Choose your TOML parser based on needs:
 | [`tomli`][tomli] | Pure Python TOML | Python 3.10 compatibility |
 | [`envtoml`][envtoml] | `${VAR}` interpolation | Environment-based config |
 | [`tomlev`][tomlev] | `${VAR|default}` syntax | Env vars with defaults |
+| [`keyring`] | `${keyring:service/username}` secrets | Credentials without plaintext configs |
 
 ```bash
 # Python 3.11+ - no extras needed
@@ -106,6 +112,9 @@ pip install clevis[tomli]
 
 # Environment variable support
 pip install clevis[envtoml]
+
+# System keyring secret support
+pip install clevis[keyring]
 ```
 
 ## Core Concepts
@@ -170,9 +179,50 @@ Use a class with `__call__` when the provider needs constructor parameters.
 See [docs/usage.rst](docs/usage.rst#custom-config-providers-cascade) for the
 full guide including security helpers for custom providers.
 
+### Secrets from the System Keyring
+
+Store credentials in the OS keychain and reference them from TOML — no
+secrets in plaintext config files:
+
+```toml
+# myapp.toml
+[database]
+password = "${keyring:myapp/db-password}"
+```
+
+Store the secret once with the `clevis` helper command (getpass prompt —
+nothing lands in shell history):
+
+```bash
+pip install clevis[keyring]
+clevis keyring set myapp db-password
+Password for myapp/db-password: ****
+Repeat: ****
+```
+
+To inspect what a TOML file looks like after full Clevis interpretation
+(keyring + env-var interpolation applied), use:
+
+```bash
+clevis cat myapp.toml
+```
+
+At load time, Clevis expands the placeholder against the system keyring
+before any TOML parser runs. `keyring` is imported lazily — only when a
+`${keyring:...}` placeholder is actually encountered — so installs that
+never use the syntax stay dependency-free (e.g. containers).
+
+- Works with every TOML backend (envtoml, tomlev, tomli, tomllib)
+- Splits on the first `/`: the username may contain `/`
+- Missing entry or missing `keyring` package raises a clear
+  `KeyringError` with fix-it guidance
+- Caveat: avoid `${` in stored secrets (env-aware backends interpolate it)
+
+Example: [examples/keyring_secrets.py](examples/keyring_secrets.py).
+
 ## Examples
 
-The `examples/` directory contains 10 comprehensive examples:
+The `examples/` directory contains 11 comprehensive examples:
 
 | Example | Features Demonstrated | Run Command |
 |---------|----------------------|-------------|
@@ -180,6 +230,7 @@ The `examples/` directory contains 10 comprehensive examples:
 | **[nested.py](examples/nested.py)** | Nested dataclasses, TOML sections | `uv run python nested.py --tool-settings-x 10` |
 | **[validation.py](examples/validation.py)** | Custom validation, `__post_init__` | `uv run python validation.py --server-url "http://localhost"` |
 | **[environment.py](examples/environment.py)** | `${VAR}` interpolation, credentials | `export DB_HOST=localhost && uv run python environment.py` |
+| **[keyring_secrets.py](examples/keyring_secrets.py)** | `${keyring:...}` secret interpolation | `clevis keyring set clevis-example db-password && uv run python keyring_secrets.py` |
 | **[factory.py](examples/factory.py)** | Multi-module orchestration, prefixes | `uv run python factory.py --app1-name "first"` |
 | **[commands.py](examples/commands.py)** | CLI subcommands, aliases | `uv run python commands.py check --verbose` |
 | **[subcommands.py](examples/subcommands.py)** | TOML override with `config` parameter | `uv run python subcommands.py cli --server-url "https://api.example.com"` |
@@ -381,3 +432,4 @@ MIT
 [tomli]: https://github.com/hukkin/tomli
 [envtoml]: https://github.com/sank8m/envtoml
 [tomlev]: https://github.com/thesimj/tomlev
+[keyring]: https://pypi.org/project/keyring/

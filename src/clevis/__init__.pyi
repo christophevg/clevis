@@ -11,9 +11,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypedDict, TypeVar, runtime_checkable
 
+from clevis.keyring import KeyringError as KeyringError
+
 # Type Variables
 
 T = TypeVar("T")
+
+__version__: str
+"""Package version (e.g. "0.8.0")."""
 
 # TOML Configuration File Constants
 

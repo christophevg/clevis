@@ -79,13 +79,10 @@ class TestTomlevFallback:
 
     parser = _get_toml_parser()
 
-    # Create a TOML file
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
-      f.write(b'name = "test"\nvalue = 42\n')
-      f.flush()
-
-      result = parser(open(f.name, "rb"))
-      assert result == {"name": "test", "value": 42}
+    # Loaders parse TOML content strings (keyring pre-expansion happens in
+    # _load_toml, not in the backend loader itself)
+    result = parser('name = "test"\nvalue = 42\n')
+    assert result == {"name": "test", "value": 42}
 
 
 class TestTomliFallback:
@@ -114,15 +111,12 @@ class TestTomliFallback:
       # and envtoml/tomlev are not
       parser = _get_toml_parser()
 
-      # Should return a callable (tomli.load or tomllib.load)
+      # Should return a callable (tomli.loads or tomllib.loads)
       assert callable(parser)
 
       # Test that it works
-      with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
-        f.write(b'key = "value"\n')
-        f.flush()
-        result = parser(open(f.name, "rb"))
-        assert result == {"key": "value"}
+      result = parser('key = "value"\n')
+      assert result == {"key": "value"}
     finally:
       # Restore modules
       if original_envtoml is not None:
@@ -156,16 +150,13 @@ class TestTomllibFallback:
       # Force re-detection - tomllib will be selected (stdlib in Python 3.11+)
       parser = _get_toml_parser()
 
-      # Should return a callable that can load TOML
-      # It will be either tomllib.load (stdlib) or one of the fallbacks
+      # Should return a callable that can parse TOML
+      # It will be either tomllib.loads (stdlib) or one of the fallbacks
       assert callable(parser)
 
       # Test that it works
-      with tempfile.NamedTemporaryFile(mode="wb", suffix=".toml", delete=False) as f:
-        f.write(b'key = "value"\n')
-        f.flush()
-        result = parser(open(f.name, "rb"))
-        assert result == {"key": "value"}
+      result = parser('key = "value"\n')
+      assert result == {"key": "value"}
     finally:
       # Restore modules
       if original_envtoml is not None:

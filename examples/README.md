@@ -18,20 +18,23 @@ We recommend reading the examples in this order to build understanding progressi
 4. **[environment.py](environment.py)** - Environment variable interpolation
    Using `${VAR}` syntax in TOML files for dynamic configuration.
 
-5. **[factory.py](factory.py)** - Shared configuration parsers
+5. **[keyring_secrets.py](keyring_secrets.py)** - Keyring secret interpolation
+   Using `${keyring:service/username}` placeholders backed by the system keyring.
+
+6. **[factory.py](factory.py)** - Shared configuration parsers
    Using factories to coordinate configuration across multiple components.
 
-6. **[commands.py](commands.py)** - CLI subcommands
+7. **[commands.py](commands.py)** - CLI subcommands
    Building command-line applications with multiple subcommands.
 
-7. **[library_mode.py](library_mode.py)** - Library-only usage
+8. **[library_mode.py](library_mode.py)** - Library-only usage
    Using Clevis in web frameworks, testing, and embedded contexts.
 
-8. **[dynamic.py](dynamic.py)** - Dynamic field registration (Advanced)
+9. **[dynamic.py](dynamic.py)** - Dynamic field registration (Advanced)
    Plugin architectures with runtime configuration injection.
 
-9. **[plugin.py](plugin.py)** - Plugin pattern (Advanced)
-   Practical example of plugin configuration registration.
+10. **[plugin.py](plugin.py)** - Plugin pattern (Advanced)
+    Practical example of plugin configuration registration.
 
 ## Example Summary
 
@@ -41,6 +44,7 @@ We recommend reading the examples in this order to build understanding progressi
 | [nested.py](nested.py) | Configuration hierarchy | Nested dataclasses, TOML sections, `@configclass` decorator |
 | [validation.py](validation.py) | Custom validation | `__post_init__`, regex validation, range checks, required fields |
 | [environment.py](environment.py) | Environment interpolation | `${VAR}` syntax, type conversion, secure credentials |
+| [keyring_secrets.py](keyring_secrets.py) | Keyring secret interpolation | `${keyring:service/username}` syntax, `clevis keyring set` helper |
 | [factory.py](factory.py) | Shared parsers | Multiple configs, prefix namespacing, shared `ArgumentParser` |
 | [commands.py](commands.py) | CLI subcommands | `cmd` parameter, command aliases, per-command configuration |
 | [library_mode.py](library_mode.py) | Library usage | `cli=False`, `args=[]`, web framework integration, testing |
@@ -57,6 +61,9 @@ pip install clevis
 
 # For environment.py (environment variable interpolation)
 pip install clevis[envtoml]
+
+# For keyring_secrets.py (system keyring secrets)
+pip install clevis[keyring]
 
 # For development/testing
 pip install clevis[dev]
@@ -99,23 +106,25 @@ Example files are provided:
 - [nested.toml](nested.toml) - For nested.py
 - [validation.toml](validation.toml) - For validation.py
 - [environment.toml](environment.toml) - For environment.py
+- [keyring.toml](keyring.toml) - For keyring_secrets.py
 
 ## Feature Matrix
 
-| Feature | main | nested | validation | environment | factory | commands | library_mode | dynamic | plugin |
-|---------|------|--------|------------|-------------|---------|----------|--------------|---------|--------|
-| Environment variables | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| CLI arguments | ✓ | ✓ | ✓ | - | ✓ | ✓ | - | ✓ | ✓ |
-| TOML files | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Nested configs | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Security validation | ✓ | - | ✓ | - | ✓ | - | ✓ | ✓ | ✓ |
-| Custom validation | - | - | ✓ | - | - | - | - | - | - |
-| `${VAR}` interpolation | - | - | - | ✓ | - | - | - | - | - |
-| Shared parser | - | - | - | - | ✓ | - | - | - | - |
-| Subcommands | - | - | - | - | - | ✓ | - | - | - |
-| Library mode (`cli=False`) | - | - | - | - | - | - | ✓ | - | - |
-| Dynamic registration | - | - | - | - | - | - | - | ✓ | ✓ |
-| Plugin pattern | - | - | - | - | - | - | - | - | ✓ |
+| Feature | main | nested | validation | environment | keyring | factory | commands | library_mode | dynamic | plugin |
+|---------|------|--------|------------|-------------|---------|---------|----------|--------------|---------|--------|
+| Environment variables | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| CLI arguments | ✓ | ✓ | ✓ | - | - | ✓ | ✓ | - | ✓ | ✓ |
+| TOML files | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Nested configs | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Security validation | ✓ | - | ✓ | - | - | ✓ | - | ✓ | ✓ | ✓ |
+| Custom validation | - | - | ✓ | - | - | - | - | - | - | - |
+| `${VAR}` interpolation | - | - | - | ✓ | - | - | - | - | - | - |
+| `${keyring:...}` interpolation | - | - | - | - | ✓ | - | - | - | - | - |
+| Shared parser | - | - | - | - | - | ✓ | - | - | - | - |
+| Subcommands | - | - | - | - | - | - | ✓ | - | - | - |
+| Library mode (`cli=False`) | - | - | - | - | - | - | ✓ | - | - | - |
+| Dynamic registration | - | - | - | - | - | - | - | - | ✓ | ✓ |
+| Plugin pattern | - | - | - | - | - | - | - | - | - | ✓ |
 
 ## Detailed Examples
 
@@ -173,7 +182,20 @@ export DB_PORT=5432
 uv run python environment.py
 ```
 
-### 5. Factory Pattern (factory.py)
+### 5. Keyring Interpolation (keyring_secrets.py)
+
+Secrets from the system keyring:
+- `${keyring:service/username}` placeholders resolved against the OS keychain
+- `clevis keyring set` helper for interactive secret storage
+- Expansion runs before any TOML parser — works with every backend
+- Requires `clevis[keyring]`
+
+```bash
+clevis keyring set clevis-example db-password
+uv run python keyring_secrets.py
+```
+
+### 6. Factory Pattern (factory.py)
 
 Shared configuration across components:
 - `get_factory()` for configuration management
@@ -186,7 +208,7 @@ uv run python factory.py --help
 uv run python factory.py --app1-name "first" --app2-name "second"
 ```
 
-### 6. Subcommands (commands.py)
+### 7. Subcommands (commands.py)
 
 CLI applications with multiple commands:
 - `cmd` parameter for subcommand definition
@@ -200,7 +222,7 @@ uv run python commands.py check --verbose
 uv run python commands.py print --rich
 ```
 
-### 7. Library Mode (library_mode.py)
+### 8. Library Mode (library_mode.py)
 
 Using Clevis in non-CLI contexts:
 - `cli=False` to disable `sys.argv` parsing
@@ -212,7 +234,7 @@ Using Clevis in non-CLI contexts:
 uv run python library_mode.py  # No CLI interference
 ```
 
-### 8. Dynamic Registration (dynamic.py)
+### 9. Dynamic Registration (dynamic.py)
 
 Plugin architecture configuration:
 - `register_field()` for runtime injection
@@ -225,7 +247,7 @@ uv run python dynamic.py
 uv run python dynamic.py --help
 ```
 
-### 9. Plugin Pattern (plugin.py)
+### 10. Plugin Pattern (plugin.py)
 
 Practical plugin implementation:
 - Module-level configuration registration

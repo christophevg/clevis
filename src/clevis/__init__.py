@@ -20,6 +20,10 @@ TOML Parser Selection (priority order):
   3. tomli    - Pure Python TOML - pip install clevis[tomli]
   4. tomllib  - Stdlib (Python 3.11+) - no extras needed
 
+Keyring Interpolation (clevis-owned pre-parse pass, works with every parser):
+  ${keyring:service/username} - pip install clevis[keyring] (keyring is
+  imported lazily, only when a placeholder is actually present)
+
 Example:
   from dataclasses import dataclass
   from clevis import get_config
@@ -59,9 +63,11 @@ from clevis.factory import (
   has_factory,
   unpack_type,
 )
+from clevis.keyring import KeyringError as KeyringError
+from clevis.keyring import expand_keyring_placeholders
 from clevis.registration import register_field
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 logger = logging.getLogger(__name__)
 
@@ -207,17 +213,21 @@ def check_directory_permissions(path: Path, action: SecurityAction) -> bool:
 
 # TOML Parser Selection
 # ---------------------
-# Tries parsers in this order: envtoml > tomlev > tomli > tomllib
+# Tries loaders in this order: envtoml > tomlev > tomli > tomllib.
+# All loaders are loads-style (content string in, dict out) so the
+# ${keyring:...} pre-parse pass in _load_toml applies uniformly to
+# every backend.
 
 
-def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
+def _get_toml_parser() -> Callable[[str], dict[str, Any]]:
   """
-  Get the appropriate TOML parser based on installed packages.
+  Get the appropriate TOML loader based on installed packages.
 
   Priority: envtoml > tomlev > tomli > tomllib (stdlib)
 
-  Returns:
-      A function that loads TOML from a file object
+  The returned loader accepts the file content as a string (after
+  optional ${keyring:...} expansion) so keyring interpolation works
+  uniformly across all backends.
 
   Raises:
       ImportError: If no TOML parser is available
@@ -226,7 +236,10 @@ def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   try:
     import envtoml
 
-    return envtoml.load
+    def load_envtoml(text: str) -> dict[str, Any]:
+      return envtoml.load(io.BytesIO(text.encode("utf-8")))
+
+    return load_envtoml
   except ImportError:
     pass
 
@@ -235,14 +248,10 @@ def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
     import tomllib  # type: ignore[import-not-found]
     from tomlev.env_loader import expandvars  # type: ignore[attr-defined]
 
-    def load_with_tomlev(file: Any) -> dict[str, Any]:
-      content = file.read()
-      if isinstance(content, bytes):
-        content = content.decode("utf-8")
-      expanded = expandvars(content)
-      return tomllib.loads(expanded)  # type: ignore[no-any-return]
+    def load_tomlev(text: str) -> dict[str, Any]:
+      return tomllib.loads(expandvars(text))  # type: ignore[no-any-return]
 
-    return load_with_tomlev
+    return load_tomlev
   except ImportError:
     pass
 
@@ -250,7 +259,10 @@ def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   try:
     import tomli
 
-    return tomli.load
+    def load_tomli(text: str) -> dict[str, Any]:
+      return tomli.loads(text)
+
+    return load_tomli
   except ImportError:
     pass
 
@@ -258,7 +270,10 @@ def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
   try:
     import tomllib
 
-    return tomllib.load  # type: ignore[no-any-return]
+    def load_tomllib(text: str) -> dict[str, Any]:
+      return tomllib.loads(text)
+
+    return load_tomllib
   except ImportError:
     pass
 
@@ -273,12 +288,16 @@ def _get_toml_parser() -> Callable[[Any], dict[str, Any]]:
 
 
 # Module-level parser (loaded once)
-_toml_load: Callable[[Any], dict[str, Any]] | None = None
+_toml_load: Callable[[str], dict[str, Any]] | None = None
 
 
 def _load_toml(file: Any) -> dict[str, Any]:
   """
   Load TOML from a file object using the selected parser.
+
+  Before parsing, ${keyring:service/username} placeholders are expanded
+  against the system keyring (see clevis.keyring). Keyring is imported
+  lazily — files without keyring placeholders never trigger the import.
 
   Args:
       file: File object opened in binary mode
@@ -289,7 +308,10 @@ def _load_toml(file: Any) -> dict[str, Any]:
   global _toml_load
   if _toml_load is None:
     _toml_load = _get_toml_parser()
-  return _toml_load(file)
+  content = file.read()
+  if isinstance(content, bytes):
+    content = content.decode("utf-8")
+  return _toml_load(expand_keyring_placeholders(content))
 
 
 def load_toml_from_fd(fd: int) -> dict[str, Any]:
@@ -326,6 +348,9 @@ def load(fp: Any) -> dict[str, Any]:
   validation, use :func:`get_config` or construct a
   :class:`UserConfigProvider` / :class:`ProjectConfigProvider`.
 
+  ``${keyring:service/username}`` placeholders are expanded before parsing
+  (see :mod:`clevis.keyring`).
+
   Args:
       fp: A binary file object (opened with mode ``'rb'``).
 
@@ -347,6 +372,9 @@ def loads(s: str) -> dict[str, Any]:
 
   This is a RAW parser with no security checks (there is no file to check
   for a string input).
+
+  ``${keyring:service/username}`` placeholders are expanded before parsing
+  (see :mod:`clevis.keyring`).
 
   Args:
       s: A string containing TOML data.
@@ -901,6 +929,10 @@ def get_config(
       - tomli: Pure Python - pip install clevis[tomli]
       - tomllib: Python 3.11+ stdlib (no extras needed)
 
+      Additionally, ${keyring:service/username} placeholders are expanded
+      by clevis itself before any parser runs (requires clevis[keyring]
+      extra; works with every parser).
+
   Args:
       clz: The dataclass type to populate
       name: Configuration file name (without .toml extension)
@@ -924,6 +956,8 @@ def get_config(
       ConfigError: If required fields are missing or values have wrong type
       SecurityError: If security checks fail (when action="reject")
       ImportError: If no TOML parser is available
+      KeyringError: If a ${keyring:...} placeholder cannot be resolved
+          (keyring not installed, entry missing, or malformed syntax)
   """
   # Build the active middle cascade.
   if cascade is not None:
