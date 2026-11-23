@@ -68,6 +68,19 @@ Optional improvements for future releases. Most tasks completed (PRs #27, #28).
   - **Reference**: Code review 2026-06-10
   - **Status**: Partially addressed by P3-008/P3-012, but main extraction not done
 
+- [ ] **P3-016: get_factory metadata fallback via MRO for dynamically augmented config subclasses**
+  - `@configclass(cmd=...)` stashes factory metadata (`cmd`, `config`, `default_cmd`, `help`, `aliases`) on the decorated class only. Dataclass *fields* inherit through normal `class X(Base)` subclassing, but factory metadata does not: `get_factory(SubClass)` returns None metadata for a class created by subclassing a decorated base (e.g. Yoker's runtime config augmentation, which builds `AugmentedConfig(Config)`/`AugmentedCmdConfig(RunConfig)` subclasses at process start — see yoker TODO 7.2 / tests/test_spike_plugin_config.py).
+  - Workaround currently required in yoker (`augmented_config_class()`): look up the nearest decorated base's factory metadata and re-apply `@configclass(cmd=..., config=..., default_cmd=..., ...)` onto the subclass. Works, but is boilerplate every downstream augmenter must repeat.
+  - **Proposed change**: `get_factory()` (and the metadata lookup it performs) falls back through the MRO to the nearest ancestor class that was registered via `@configclass`, returning that metadata when the queried class itself was never decorated. Explicit decoration on the subclass continues to win (no behavior change for existing decorated classes).
+  - **Acceptance**:
+    - `get_factory(cls)` for a plain subclass of a decorated config returns the base's factory metadata (cmd/config/default_cmd/help/aliases)
+    - Existing decorated classes behave unchanged (explicit metadata always wins over inherited)
+    - A subclass that is itself decorated returns its own metadata, not the base's
+    - All existing tests pass; new tests cover the three cases above
+    - Yoker can drop the decorator re-application workaround (verified against yoker's spike test 4 — coordination via yoker project at that point)
+  - **Priority**: P3 — backlog only; not blocking yoker (decorator re-application works today; will be picked up during the yoker loader/bootstrap consolidation, yoker TODO M.6)
+  - **Reference**: yoker session 2026-09-13, spike finding 1 (tests/test_spike_plugin_config.py)
+
 - [x] **P3-011: Clarify decorator return logic** ✅ 2026-06-11 (PR #27)
   - Add comments explaining `configclass.py:103-106` decorator pattern variants
   - Conditional `if cls and not cmd and help is None...` is hard to parse
